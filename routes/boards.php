@@ -8,7 +8,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/boards', [BoardController::class, 'index'])->name('boards.index');
     
     // Форма створення нової дошки
-    Route::get('/boards/create', [BoardController::class, 'create'])->name('boards.create');
+    Route::get('/board/createsmth', [BoardController::class, 'create'])->name('boards.create');
     
     // Збереження нової дошки
     Route::post('/boards', [BoardController::class, 'store'])->name('boards.store');

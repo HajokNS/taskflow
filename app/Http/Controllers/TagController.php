@@ -16,7 +16,7 @@ class TagController extends Controller
 
     public function index()
     {
-        return inertia('Tags/Index', [
+        return inertia('tags', [
             'tags' => $this->service->getUserTags(Auth::id())
         ]);
     }
@@ -28,17 +28,19 @@ class TagController extends Controller
             'color' => 'required|string|size:7'
         ]);
 
-        $this->service->createTag(Auth::id(), $validated);
+        $tag = Tag::create($validated);
 
-        return back()->with('success', 'Tag created successfully');
+        return back()->with([
+            'tags' => Tag::all(),
+            'flash' => ['message' => 'Тег успішно створено', 'type' => 'success']
+        ]);
     }
 
     public function update(Request $request, Tag $tag)
     {
-        $this->authorize('update', $tag);
-
+       
         $validated = $request->validate([
-            'name' => 'sometimes|string|max:50',
+            'name' => 'sometimes|string|max:20',
             'color' => 'sometimes|string|size:7'
         ]);
 
@@ -49,7 +51,7 @@ class TagController extends Controller
 
     public function destroy(Tag $tag)
     {
-        $this->authorize('delete', $tag);
+       
         $this->service->deleteTag($tag);
         return back()->with('success', 'Tag deleted successfully');
     }

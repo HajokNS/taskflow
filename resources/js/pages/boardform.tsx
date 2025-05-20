@@ -1,6 +1,6 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Star, Lock, Clock, DollarSign } from 'lucide-react';
+import { Star, Clock, DollarSign, Paperclip, Trash2 } from 'lucide-react';
 import DateRangePicker from '@/components/date-range-picker';
 import { useState, useRef, useEffect } from 'react';
 import { Head, router } from '@inertiajs/react';
@@ -10,14 +10,9 @@ const breadcrumbs: BreadcrumbItem[] = [
     title: 'Дошки',
     href: '/boards',
   },
-  {
-    title: 'Нова дошка',
-    href: '#',
-  },
 ];
 
 const COLOR_PALETTE = [
-     
   '#FFFFFF', '#000000', '#FF6900', '#FCB900', '#7BDCB5', 
   '#8ED1FC', '#0693E3', '#ABB8C3', '#EB144C', '#00D084'
 ];
@@ -30,9 +25,12 @@ export default function BoardFormPage() {
   const [description, setDescription] = useState('');
   const [hours, setHours] = useState(0);
   const [budget, setBudget] = useState(0);
-  const [isPublic, setIsPublic] = useState(false);
   const [color, setColor] = useState('#FFFFFF');
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const colorPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,26 +55,66 @@ export default function BoardFormPage() {
     setIsFavorite(!isFavorite);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files);
+      setFiles([...files, ...newFiles]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(files.filter((_, i) => i !== index));
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files) {
+      const newFiles = Array.from(e.dataTransfer.files);
+      setFiles([...files, ...newFiles]);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
+
+    const formData = new FormData();
     
-    router.post('/boards', {
-      title: boardTitle,
-      description,
-      is_favorite: isFavorite,
-      is_public: isPublic,
-      start_date: startDate.toISOString().split('T')[0],
-      end_date: endDate.toISOString().split('T')[0],
-      estimated_hours: hours,
-      estimated_budget: budget,
-      color,
-    }, {
+    // Додаємо звичайні поля
+    formData.append('title', boardTitle);
+    formData.append('description', description);
+    formData.append('is_favorite', isFavorite ? '1' : '0');
+    formData.append('start_date', startDate.toISOString().split('T')[0]);
+    formData.append('end_date', endDate.toISOString().split('T')[0]);
+    formData.append('estimated_hours', String(hours));
+    formData.append('estimated_budget', String(budget));
+    formData.append('color', color);
+    
+    // Додаємо файли
+    files.forEach((file, index) => {
+      formData.append(`attachments[${index}]`, file);
+    });
+
+    router.post('/boards', formData, {
       onSuccess: () => {
         router.visit('/boards');
       },
       onError: (errors) => {
         console.error('Помилки при збереженні:', errors);
-      }
+        setIsSubmitting(false);
+      },
+      forceFormData: true,
     });
   };
 
@@ -96,16 +134,6 @@ export default function BoardFormPage() {
                 value={boardTitle}
                 onChange={(e) => setBoardTitle(e.target.value)}
                 required
-                onInvalid={(e) => {
-                  (e.target as HTMLInputElement).setCustomValidity(' ');
-                  (e.target as HTMLInputElement).reportValidity();
-                  setTimeout(() => {
-                    (e.target as HTMLInputElement).setCustomValidity('Будь ласка, введіть назву дошки');
-                  }, 50);
-                }}
-                onInput={(e) => {
-                  (e.target as HTMLInputElement).setCustomValidity('');
-                }}
               />
             </div>
             <div className="flex items-center gap-2 relative">
@@ -121,66 +149,61 @@ export default function BoardFormPage() {
                 />
               </button>
               
-              {/* Модальне вікно вибору кольору */}
               {showColorPicker && (
-        <div 
-          ref={colorPickerRef}
-          className="absolute top-full left-0 mt-2 z-10 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700"
-          style={{ width: '220px' }}
-        >
-          <div className="flex flex-col gap-3">
-            {/* Перший рядок з 5 кольорами */}
-            <div className="grid grid-cols-5 gap-3">
-              {COLOR_PALETTE.slice(0, 5).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${
-                    color === c 
-                      ? 'border-2 border-white dark:border-gray-900 shadow-md' 
-                      : 'border border-transparent'
-                  } ${
-                    c === '#FFFFFF' ? 'border border-gray-300' : ''
-                  }`}
-                  style={{ 
-                    backgroundColor: c,
-                    boxShadow: color === c ? `0 0 0 2px ${c === '#FFFFFF' ? '#000000' : c}` : 'none'
-                  }}
-                  onClick={() => {
-                    setColor(c);
-                    setShowColorPicker(false);
-                  }}
-                  title={`Колір ${c === '#FFFFFF' ? 'білий' : c === '#000000' ? 'чорний' : c}`}
-                />
-              ))}
-            </div>
-            
-            {/* Другий рядок з 5 кольорами */}
-            <div className="grid grid-cols-5 gap-3">
-              {COLOR_PALETTE.slice(5, 10).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${
-                    color === c 
-                      ? 'border-2 border-white dark:border-gray-900 shadow-md' 
-                      : 'border border-transparent'
-                  }`}
-                  style={{ 
-                    backgroundColor: c,
-                    boxShadow: color === c ? `0 0 0 2px ${c}` : 'none'
-                  }}
-                  onClick={() => {
-                    setColor(c);
-                    setShowColorPicker(false);
-                  }}
-                  title={`Колір ${c}`}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+                <div 
+                  ref={colorPickerRef}
+                  className="absolute top-full left-0 mt-2 z-10 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700"
+                  style={{ width: '220px' }}
+                >
+                  <div className="flex flex-col gap-3">
+                    <div className="grid grid-cols-5 gap-3">
+                      {COLOR_PALETTE.slice(0, 5).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${
+                            color === c 
+                              ? 'border-2 border-white dark:border-gray-900 shadow-md' 
+                              : 'border border-transparent'
+                          } ${
+                            c === '#FFFFFF' ? 'border border-gray-300' : ''
+                          }`}
+                          style={{ 
+                            backgroundColor: c,
+                            boxShadow: color === c ? `0 0 0 2px ${c === '#FFFFFF' ? '#000000' : c}` : 'none'
+                          }}
+                          onClick={() => {
+                            setColor(c);
+                            setShowColorPicker(false);
+                          }}
+                        />
+                      ))}
+                    </div>
+                    
+                    <div className="grid grid-cols-5 gap-3">
+                      {COLOR_PALETTE.slice(5, 10).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${
+                            color === c 
+                              ? 'border-2 border-white dark:border-gray-900 shadow-md' 
+                              : 'border border-transparent'
+                          }`}
+                          style={{ 
+                            backgroundColor: c,
+                            boxShadow: color === c ? `0 0 0 2px ${c}` : 'none'
+                          }}
+                          onClick={() => {
+                            setColor(c);
+                            setShowColorPicker(false);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
               <button 
                 type="button"
                 onClick={toggleFavorite}
@@ -205,16 +228,64 @@ export default function BoardFormPage() {
             
             <div className="mt-4">
               <h3 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Файли проекту</h3>
-              <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
-                <p className="text-gray-500 dark:text-gray-400 mb-2">Перетягніть файли сюди або</p>
+              
+              <div 
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                  isDragging 
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                    : 'border-gray-300 dark:border-gray-600'
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <input 
+                  type="file" 
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  multiple
+                />
+                
+                <Paperclip className="h-10 w-10 mx-auto text-gray-400 dark:text-gray-500 mb-2" />
+                <p className="text-gray-500 dark:text-gray-400 mb-2">
+                  {isDragging ? 'Відпустіть файли для завантаження' : 'Перетягніть файли сюди або'}
+                </p>
                 <button 
                   type="button"
+                  onClick={() => fileInputRef.current?.click()}
                   className="text-blue-600 hover:text-blue-800 font-medium dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   Виберіть файли
                 </button>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">PNG, JPG, PDF (до 10MB)</p>
               </div>
+              
+              {files.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {files.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <Paperclip className="h-4 w-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                        <span className="truncate text-sm text-gray-700 dark:text-gray-300">
+                          {file.name}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(index)}
+                        className="text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 p-1"
+                        title="Видалити файл"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
 
@@ -268,57 +339,29 @@ export default function BoardFormPage() {
             </div>
           </section>
 
-          {/* Налаштування доступу */}
-          <section className="rounded-xl p-6 shadow-sm dark:shadow-none border border-gray-200 dark:border-gray-700 mb-8">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 dark:text-white">
-              <Lock className="h-5 w-5 text-blue-500" />
-              <span>Доступ</span>
-            </h2>
-            
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <input 
-                  type="radio" 
-                  id="access-private" 
-                  name="access" 
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 dark:text-blue-400"
-                  checked={!isPublic}
-                  onChange={() => setIsPublic(false)}
-                />
-                <label htmlFor="access-private" className="text-gray-700 dark:text-gray-300">
-                  Приватна
-                </label>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <input 
-                  type="radio" 
-                  id="access-public" 
-                  name="access" 
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 dark:text-blue-400"
-                  checked={isPublic}
-                  onChange={() => setIsPublic(true)}
-                />
-                <label htmlFor="access-public" className="text-gray-700 dark:text-gray-300">
-                  Публічна
-                </label>
-              </div>
-            </div>
-          </section>
-
           {/* Кнопки дій */}
           <div className="flex justify-end gap-3">
             <button 
               type="button"
               className="px-6 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              onClick={() => router.visit('/boards')}
             >
               Скасувати
             </button>
             <button 
               type="submit"
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 min-w-32"
+              disabled={isSubmitting}
             >
-              Зберегти дошку
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Збереження...
+                </>
+              ) : 'Зберегти дошку'}
             </button>
           </div>
         </form>

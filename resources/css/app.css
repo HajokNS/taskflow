@@ -1,5 +1,20 @@
 @import 'tailwindcss';
 
+
+@import '../../node_modules/@syncfusion/ej2-base/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-buttons/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-calendars/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-dropdowns/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-inputs/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-lists/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-layouts/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-navigations/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-popups/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-splitbuttons/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-grids/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-treegrid/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-react-gantt/styles/material.css';
+
 @plugin 'tailwindcss-animate';
 
 @source '../views';
@@ -156,4 +171,46 @@
     body {
         @apply bg-background text-foreground;
     }
+}
+
+
+/* Додаткові стилі для кращого відображення */
+.badge {
+  transition: all 0.2s ease;
+}
+
+.badge:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* Стилі для скроллбару */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #2d3748;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #4a5568;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #718096;
 }

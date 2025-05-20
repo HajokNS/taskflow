@@ -10,7 +10,8 @@ interface Task {
   description?: string;
   status: 'todo' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high';
-  deadline?: string;
+  start_date?: string;
+  end_date?: string;
   tags: Array<{
     id: string;
     name: string;
@@ -19,7 +20,8 @@ interface Task {
 }
 
 export function TaskCard({ task }: { task: Task }) {
-  const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== 'done';
+  const isOverdue = task.end_date && new Date(task.end_date) < new Date() && task.status !== 'done';
+  const hasDateRange = task.start_date && task.end_date;
   
   return (
     <Link href={route('tasks.show', task.id)}>
@@ -37,9 +39,18 @@ export function TaskCard({ task }: { task: Task }) {
             </Badge>
           </div>
           
-          {task.deadline && (
+          {(task.start_date || task.end_date) && (
             <div className={`mt-2 text-xs ${isOverdue ? 'text-red-500' : 'text-muted-foreground'}`}>
-              {format(new Date(task.deadline), 'd MMM yyyy', { locale: uk })}
+              {hasDateRange ? (
+                <>
+                  {format(new Date(task.start_date), 'd MMM yyyy', { locale: uk })} - {' '}
+                  {format(new Date(task.end_date), 'd MMM yyyy', { locale: uk })}
+                </>
+              ) : (
+                task.end_date 
+                  ? format(new Date(task.end_date), 'd MMM yyyy', { locale: uk })
+                  : format(new Date(task.start_date), 'd MMM yyyy', { locale: uk })
+              )}
               {isOverdue && ' (протерміновано)'}
             </div>
           )}

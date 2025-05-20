@@ -213,11 +213,7 @@ export default function Boards({ boards, favorites, filters = {} }: Props) {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Всі дошки</h2>
-            {sortValue && (
-              <div className="text-sm text-muted-foreground">
-                Сортування: {getSortLabel(sortValue)}
-              </div>
-            )}
+            
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

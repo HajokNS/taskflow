@@ -45,7 +45,7 @@ class BoardService
         return $this->getUserBoards($userId, $search, null, true);
     }
 
-    public function createBoard(string $userId, array $data): Board
+      public function createBoard(string $userId, array $data, array $attachments): Board
     {
         try {
             return Board::create([
@@ -54,11 +54,11 @@ class BoardService
                 'description' => $data['description'] ?? null,
                 'is_favorite' => $data['is_favorite'] ?? false,
                 'color' => $data['color'],
-                'is_public' => $data['is_public'] ?? false,
                 'start_date' => $data['start_date'] ?? null,
                 'end_date' => $data['end_date'] ?? null,
                 'estimated_hours' => $data['estimated_hours'] ?? 0,
                 'estimated_budget' => $data['estimated_budget'] ?? 0,
+                'attachments' => $attachments ?? null // Додаємо вкладення
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to create board: ' . $e->getMessage());
@@ -66,7 +66,7 @@ class BoardService
         }
     }
 
-    public function updateBoard(Board $board, array $data): Board
+     public function updateBoard(Board $board, array $data): Board
     {
         try {
             $board->update([
@@ -74,11 +74,11 @@ class BoardService
                 'description' => $data['description'] ?? $board->description,
                 'is_favorite' => $data['is_favorite'] ?? $board->is_favorite,
                 'color' => $data['color'] ?? $board->color,
-                'is_public' => $data['is_public'] ?? $board->is_public,
                 'start_date' => $data['start_date'] ?? $board->start_date,
                 'end_date' => $data['end_date'] ?? $board->end_date,
                 'estimated_hours' => $data['estimated_hours'] ?? $board->estimated_hours,
                 'estimated_budget' => $data['estimated_budget'] ?? $board->estimated_budget,
+                'attachments' => $data['attachments'] ?? $board->attachments // Оновлюємо вкладення
             ]);
 
             return $board->fresh();

@@ -28,17 +28,29 @@ class ProfileController extends Controller
      * Update the user's profile settings.
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
-    {
-        $request->user()->fill($request->validated());
+{
+    $request->validate([
+        'name' => ['required', 'string', 'max:255'],
+        'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,'.$request->user()->id],
+    ], [
+        'name.required' => 'Ім\'я обов\'язкове',
+        'name.max' => 'Ім\'я має бути не довше 255 символів',
+        'email.required' => 'Електронна пошта обов\'язкова',
+        'email.email' => 'Введіть коректну електронну пошту',
+        'email.max' => 'Електронна пошта має бути не довше 255 символів',
+        'email.unique' => 'Ця електронна пошта вже використовується',
+    ]);
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
-        }
+    $request->user()->fill($request->validated());
 
-        $request->user()->save();
-
-        return to_route('profile.edit');
+    if ($request->user()->isDirty('email')) {
+        $request->user()->email_verified_at = null;
     }
+
+    $request->user()->save();
+
+    return to_route('profile.edit');
+}
 
     /**
      * Delete the user's account.
@@ -47,6 +59,9 @@ class ProfileController extends Controller
     {
         $request->validate([
             'password' => ['required', 'current_password'],
+        ], [
+            'password.required' => 'Пароль обов\'язковий',
+            'password.current_password' => 'Пароль невірний',
         ]);
 
         $user = $request->user();

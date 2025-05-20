@@ -2,6 +2,9 @@ import { Link } from '@inertiajs/react'
 import { Badge } from '@/components/ui/badge'
 
 export function TaskCard({ task }) {
+  const hasDateRange = task.start_date && task.end_date
+  const isOverdue = task.end_date && new Date(task.end_date) < new Date()
+
   return (
     <Link
       href={`/tasks/${task.id}`}
@@ -34,13 +37,18 @@ export function TaskCard({ task }) {
             ))}
           </div>
           
-          {task.deadline && (
+          {(task.start_date || task.end_date) && (
             <span className={`text-xs ${
-              new Date(task.deadline) < new Date() 
-                ? 'text-red-500' 
-                : 'text-gray-500 dark:text-gray-400'
+              isOverdue ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'
             }`}>
-              {task.deadline.toLocaleString()}
+              {hasDateRange ? (
+                `${new Date(task.start_date).toLocaleDateString()} - ${new Date(task.end_date).toLocaleDateString()}`
+              ) : (
+                task.end_date 
+                  ? new Date(task.end_date).toLocaleDateString()
+                  : new Date(task.start_date).toLocaleDateString()
+              )}
+              {isOverdue && ' (overdue)'}
             </span>
           )}
         </div>

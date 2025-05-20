@@ -12,8 +12,7 @@ class Tag extends Model
 
     protected $fillable = [
         'name',
-        'color',
-        'user_id'
+        'color'
     ];
 
     public function user()
@@ -23,6 +22,6 @@ class Tag extends Model
 
     public function tasks()
     {
-        return $this->belongsToMany(Task::class);
+        return $this->belongsToMany(Task::class, 'task_tag');
     }
 }

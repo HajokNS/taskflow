@@ -20,22 +20,22 @@ class Board extends Model
         'description',
         'color',
         'is_favorite',
-        'is_public',
         'user_id',
         'start_date',
         'end_date',
         'estimated_hours',
         'estimated_budget',
         'views_count',
+        'attachments'
     ];
 
     protected $casts = [
         'is_favorite' => 'boolean',
-        'is_public' => 'boolean',
         'start_date' => 'date',
         'end_date' => 'date',
         'estimated_hours' => 'float',
         'estimated_budget' => 'float',
+        'attachments' => 'array'
     ];
 
     public function user(): BelongsTo

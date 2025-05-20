@@ -15,9 +15,9 @@ return new class extends Migration
             $table->string('color', 7)->default('#FFFFFF');
             $table->foreignUuid('user_id')->constrained('users')->onDelete('cascade');
             $table->boolean('is_favorite')->default(false);
-            $table->boolean('is_public')->default(false);
             $table->date('start_date')->nullable();
             $table->date('end_date')->nullable();
+            $table->json('attachments')->nullable();
             $table->decimal('estimated_hours', 8, 2)->nullable();
             $table->decimal('estimated_budget', 12, 2)->nullable(); 
             $table->timestamps();

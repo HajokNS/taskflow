@@ -13,11 +13,13 @@ return new class extends Migration
             $table->uuid('user_id');
             $table->string('title');
             $table->text('description')->nullable();
-            $table->dateTime('deadline')->nullable();
+            $table->date('start_date')->nullable();
+            $table->date('end_date')->nullable();
             $table->enum('priority', ['low', 'medium', 'high'])->nullable();
             $table->enum('risk', ['low', 'medium', 'high'])->nullable();
-            $table->enum('status', ['active', 'completed', 'archived'])->default('active');
-            $table->boolean('is_completed')->nullable();
+            $table->enum('status', ['not_started', 'active', 'overdue', 'completed'])->default('not_started');
+            $table->boolean('is_completed')->default(false);
+            $table->json('attachments')->nullable(); 
             $table->foreignUuid('board_id')->constrained('boards')->onDelete('cascade');
             $table->uuid('parent_id')->nullable();
             $table->timestamps();
