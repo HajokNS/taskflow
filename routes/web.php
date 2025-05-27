@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Http\Controllers\BoardController;
 use App\Http\Controllers\TaskController;
 
 Route::get('/', function () {
@@ -13,6 +14,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return redirect(route('boards.index'));
     })->name('dashboard');
 });
+
+Route::post('/boards/{board}/upload', [BoardController::class, 'upload'])->name('boards.upload');
+
 
 Route::get('/gantt', [TaskController::class, 'gantt'])->name('gantt');
 

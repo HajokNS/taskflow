@@ -58,7 +58,7 @@ class BoardService
                 'end_date' => $data['end_date'] ?? null,
                 'estimated_hours' => $data['estimated_hours'] ?? 0,
                 'estimated_budget' => $data['estimated_budget'] ?? 0,
-                'attachments' => $attachments ?? null // Додаємо вкладення
+                'attachments' => $attachments 
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to create board: ' . $e->getMessage());

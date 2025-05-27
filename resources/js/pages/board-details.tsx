@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
-import { ArrowLeft, Star, Edit, Trash2, Clock, PieChart, DollarSign, Calendar as CalendarIcon, Flag, AlertCircle, CheckCircle, Circle, X } from 'lucide-react';
+import { ArrowLeft, Star, Edit, Trash2, Clock, PieChart, DollarSign, Calendar as CalendarIcon, Flag, AlertCircle, CheckCircle, Circle, X, Plus, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Toaster, toast } from 'sonner';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -43,6 +44,7 @@ interface Board {
       color: string;
     }>;
   }>;
+  attachments?: string[];
 }
 
 interface Props {
@@ -149,7 +151,6 @@ const TaskCard = ({ task }: { task: Board['tasks'][0] }) => {
         </p>
       )}
 
-      {/* Блок з датами та часом */}
       <div className="mt-2 space-y-1">
         {task.start_date && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -216,11 +217,11 @@ const TaskColumn = ({ title, tasks, color }: { title: string; tasks: Board['task
 
 export default function BoardDetails({ board }: Props) {
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [boardData, setBoardData] = useState(board);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Групуємо задачі за статусами
   const tasksByStatus = {
     not_started: boardData.tasks?.filter(task => task.status === 'not_started') || [],
     active: boardData.tasks?.filter(task => task.status === 'active') || [],
@@ -232,7 +233,6 @@ export default function BoardDetails({ board }: Props) {
   const completionPercentage = totalTasks > 0 
     ? Math.round((tasksByStatus.completed.length / totalTasks) * 100) : 0;
 
-  // Розрахунок прогресу часу дошки
   const calculateTimeProgress = () => {
     if (!boardData.start_date || !boardData.end_date) return 0;
     
@@ -248,7 +248,6 @@ export default function BoardDetails({ board }: Props) {
 
   const timeProgress = calculateTimeProgress();
 
-  // Дані для кругової діаграми
   const pieChartData = {
     labels: ['Не розпочато', 'Активні', 'Завершені', 'Прострочені'],
     datasets: [
@@ -260,19 +259,48 @@ export default function BoardDetails({ board }: Props) {
           tasksByStatus.overdue.length
         ],
         backgroundColor: [
-          '#94a3b8', // сірий - не розпочато
-          '#3b82f6', // синій - активні
-          '#10b981', // зелений - завершені
-          '#ef4444'  // червоний - прострочені
+          '#94a3b8',
+          '#3b82f6',
+          '#10b981',
+          '#ef4444'
         ],
         borderWidth: 0,
       },
     ],
   };
 
-  // Статистика для картки
-  const highPriorityTasks = [...tasksByStatus.not_started, ...tasksByStatus.active]
-    .filter(task => task.priority === 'high').length;
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!boardData.title.trim()) {
+      newErrors.title = 'Назва дошки обов\'язкова';
+      toast.error('Будь ласка, введіть назву дошки');
+    } else if (boardData.title.length < 5) {
+      newErrors.title = 'Назва повинна містити щонайменше 5 символів';
+      toast.error('Назва повинна містити щонайменше 5 символів');
+    } else if (boardData.title.length > 50) {
+      newErrors.title = 'Назва не може перевищувати 50 символів';
+      toast.error('Назва не може перевищувати 50 символів');
+    }
+
+    if (boardData.description && boardData.description.length > 1000) {
+      newErrors.description = 'Опис не може перевищувати 1000 символів';
+      toast.error('Опис не може перевищувати 1000 символів');
+    }
+
+    if (boardData.estimated_hours && boardData.estimated_hours < 0) {
+      newErrors.estimated_hours = 'Години не можуть бути від\'ємними';
+      toast.error('Години не можуть бути від\'ємними');
+    }
+
+    if (boardData.estimated_budget && boardData.estimated_budget < 0) {
+      newErrors.estimated_budget = 'Бюджет не може бути від\'ємним';
+      toast.error('Бюджет не може бути від\'ємним');
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleBoardUpdate = (field: string, value: any) => {
     setBoardData(prev => ({
@@ -282,6 +310,10 @@ export default function BoardDetails({ board }: Props) {
   };
 
   const saveBoard = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
     try {
       await router.put(route('boards.update', boardData.id), {
         title: boardData.title,
@@ -290,31 +322,112 @@ export default function BoardDetails({ board }: Props) {
         color: boardData.color,
         estimated_hours: boardData.estimated_hours,
         estimated_budget: boardData.estimated_budget
+      }, {
+        onSuccess: () => {
+          toast.success('Дошку успішно оновлено');
+          setEditModalOpen(false);
+        },
+        onError: (errors) => {
+          toast.error('Помилка при оновленні дошки');
+          setErrors(errors);
+        }
       });
-      setEditModalOpen(false);
-      router.reload();
     } catch (error) {
       console.error('Помилка при оновленні дошки:', error);
+      toast.error('Сталася помилка при оновленні дошки');
     }
   };
 
   const deleteBoard = async () => {
-    setIsDeleting(true);
+  toast('Ви впевнені, що хочете видалити цю дошку?', {
+    action: {
+      label: 'Видалити',
+      onClick: async () => {
+        setIsDeleting(true);
+        try {
+          const promise = router.delete(route('boards.destroy', boardData.id));
+
+          toast.promise(promise, {
+            loading: 'Видалення дошки...',
+            success: () => {
+              router.get(route('boards.index'));
+              return 'Дошку успішно видалено';
+            },
+            error: () => {
+              setIsDeleting(false);
+              return 'Не вдалося видалити дошку';
+            }
+          });
+
+          await promise;
+        } catch (error) {
+          console.error('Помилка при видаленні дошки:', error);
+          toast.error('Сталася помилка при видаленні дошки');
+          setIsDeleting(false);
+        }
+      }
+    },
+    cancel: {
+      label: 'Скасувати',
+      onClick: () => {
+        setIsDeleting(false);
+      }
+    },
+    duration: 10000
+  });
+};
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('Файл не може бути більше 10MB');
+        return;
+      }
+      
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 
+                         'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                         'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+      if (!validTypes.includes(file.type)) {
+        toast.error('Непідтримуваний тип файлу. Дозволені: JPG, PNG, GIF, PDF, DOC, DOCX, XLS, XLSX');
+        return;
+      }
+      
+      setSelectedFile(file);
+      handleFileUpload(file);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
     try {
-      await router.delete(route('boards.destroy', boardData.id));
-      router.visit(route('boards.index'));
+      await router.post(`/boards/${boardData.id}/upload`, formData, {
+        onSuccess: (page) => {
+          setBoardData(page.props.board);
+          toast.success('Файл успішно завантажено');
+        },
+        onError: (errors) => {
+          toast.error('Сталася помилка при завантаженні файлу');
+          console.error('Помилка при завантаженні файлу:', errors);
+        },
+        forceFormData: true,
+        only: ['board']
+      });
     } catch (error) {
-      console.error('Помилка при видаленні дошки:', error);
-      setIsDeleting(false);
+      console.error('Помилка при завантаженні файлу:', error);
+      toast.error('Сталася помилка при завантаженні файлу');
     }
   };
 
   return (
     <AppLayout>
       <Head title={boardData.title} />
+      <Toaster position="top-center" richColors />
       
       <div className="container mx-auto px-4 py-8 space-y-6">
-        {/* Заголовок та кнопки управління */}
         <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center space-x-4">
             <Link 
@@ -337,23 +450,32 @@ export default function BoardDetails({ board }: Props) {
           </div>
           
           <div className="flex space-x-2">
+            <Button 
+              variant="default" 
+              size="sm" 
+              asChild
+            >
+              <Link href={route('tasks.create', { board_id: board.id })}>
+                <Plus className="h-4 w-4 mr-2" />
+                Додати завдання
+              </Link>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setEditModalOpen(true)}>
               <Edit className="h-4 w-4 mr-2" />
               Редагувати
             </Button>
             <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeleteConfirmOpen(true)}
+              variant="destructive"  // Червоний фон, білий текст
+              size="sm"
+              onClick={deleteBoard}
+              disabled={isDeleting}
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              Видалити
+              {isDeleting ? 'Видалення...' : 'Видалити'}
             </Button>
           </div>
         </div>
 
-        {/* Інформація про дошку */}
         <div className="space-y-2">
           <div className="flex items-center space-x-3">
             <h1 className="text-3xl font-bold tracking-tight">
@@ -370,9 +492,7 @@ export default function BoardDetails({ board }: Props) {
           )}
         </div>
 
-        {/* Перший ряд карток */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Картка інформації про дошку */}
           <Card className="border shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-center space-x-2">
@@ -406,7 +526,6 @@ export default function BoardDetails({ board }: Props) {
             </CardContent>
           </Card>
 
-          {/* Картка прогресу часу */}
           <Card className="border shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-center space-x-2">
@@ -431,7 +550,6 @@ export default function BoardDetails({ board }: Props) {
             </CardContent>
           </Card>
 
-          {/* Картка кругової діаграми */}
           <Card className="border shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-center space-x-2">
@@ -458,7 +576,6 @@ export default function BoardDetails({ board }: Props) {
             </CardContent>
           </Card>
 
-          {/* Картка запланованих витрат */}
           <Card className="border shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-center space-x-2">
@@ -482,18 +599,57 @@ export default function BoardDetails({ board }: Props) {
                     {boardData.estimated_budget || 0} грн
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Високий пріоритет:</span>
-                  <Badge variant="destructive" className="px-2">
-                    {highPriorityTasks}
-                  </Badge>
-                </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Другий ряд карток з завданнями */}
+        <Card className="col-span-1 md:col-span-2 lg:col-span-4 border shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-3">
+            <div className="flex items-center space-x-2">
+              <Paperclip className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg font-semibold">Прикріплені файли</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {boardData.attachments?.length > 0 ? (
+              <ul className="space-y-2">
+                {boardData.attachments.map((file, index) => {
+                  const fileUrl = typeof file === 'string' ? file : file.url;
+                  const fileName = typeof file === 'string' ? file.split('/').pop() : file.name ?? file.url?.split('/').pop();
+                  return (
+                    <li key={index} className="flex items-center justify-between bg-muted p-2 rounded">
+                      <a href={fileUrl} download className="text-primary hover:underline break-all">{fileName}</a>
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={fileUrl} download>Скачати</a>
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">Файлів не додано.</p>
+            )}
+
+            <div className="mt-4">
+              <input 
+                type="file" 
+                id="file-upload" 
+                className="hidden"
+                onChange={handleFileChange}
+                accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx"
+              />
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={() => document.getElementById('file-upload')?.click()}
+              >
+                <Plus className="h-4 w-4 mr-2" /> Додати файл
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <TaskColumn 
             title="Не розпочаті" 
@@ -518,7 +674,6 @@ export default function BoardDetails({ board }: Props) {
         </div>
       </div>
 
-      {/* Модальне вікно редагування */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -532,10 +687,14 @@ export default function BoardDetails({ board }: Props) {
                   type="text"
                   placeholder="Назва дошки"
                   value={boardData.title}
-                  onChange={(e) => handleBoardUpdate('title', e.target.value)}
+                  onChange={(e) => {
+                    handleBoardUpdate('title', e.target.value);
+                    if (errors.title) setErrors({...errors, title: ''});
+                  }}
                   className="text-xl"
-                  required
+                  maxLength={50}
                 />
+               
               </div>
               <button 
                 type="button"
@@ -550,9 +709,24 @@ export default function BoardDetails({ board }: Props) {
               <Textarea
                 placeholder="Опис дошки"
                 value={boardData.description || ''}
-                onChange={(e) => handleBoardUpdate('description', e.target.value)}
+                onChange={(e) => {
+                  handleBoardUpdate('description', e.target.value);
+                  if (errors.description) setErrors({...errors, description: ''});
+                }}
                 className="min-h-[100px]"
+                maxLength={1000}
               />
+              <div className="flex justify-between mt-1">
+                {errors.description && (
+                  <div className="flex items-center text-sm text-red-500">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    {errors.description}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  {boardData.description?.length || 0}/1000 символів
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -561,9 +735,13 @@ export default function BoardDetails({ board }: Props) {
                 <Input
                   type="number"
                   value={boardData.estimated_hours || 0}
-                  onChange={(e) => handleBoardUpdate('estimated_hours', Number(e.target.value))}
+                  onChange={(e) => {
+                    handleBoardUpdate('estimated_hours', Number(e.target.value));
+                    if (errors.estimated_hours) setErrors({...errors, estimated_hours: ''});
+                  }}
                   min="0"
                 />
+                
               </div>
 
               <div>
@@ -571,10 +749,13 @@ export default function BoardDetails({ board }: Props) {
                 <Input
                   type="number"
                   value={boardData.estimated_budget || 0}
-                  onChange={(e) => handleBoardUpdate('estimated_budget', Number(e.target.value))}
+                  onChange={(e) => {
+                    handleBoardUpdate('estimated_budget', Number(e.target.value));
+                    if (errors.estimated_budget) setErrors({...errors, estimated_budget: ''});
+                  }}
                   min="0"
-                  step="0.01"
                 />
+                
               </div>
             </div>
 
@@ -614,41 +795,6 @@ export default function BoardDetails({ board }: Props) {
                 Зберегти зміни
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Діалог підтвердження видалення */}
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Підтвердження видалення</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <Alert variant="destructive">
-              <AlertDescription>
-                Ви впевнені, що хочете видалити дошку "{boardData.title}"? Цю дію неможливо скасувати.
-              </AlertDescription>
-            </Alert>
-
-            <DialogFooter>
-              <Button 
-                type="button" 
-                variant="outline"
-                onClick={() => setDeleteConfirmOpen(false)}
-              >
-                Скасувати
-              </Button>
-              <Button 
-                type="button" 
-                variant="destructive"
-                onClick={deleteBoard}
-                disabled={isDeleting}
-              >
-                {isDeleting ? 'Видалення...' : 'Видалити'}
-              </Button>
-            </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>

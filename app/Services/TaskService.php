@@ -20,7 +20,7 @@ class TaskService
                 $query->where('board_id', $boardId))
             ->with(['board', 'tags', 'parent'])
             ->orderBy('created_at', 'desc')
-            ->paginate(15)
+            ->paginate(9999999999)
             ->withQueryString();
     }
 

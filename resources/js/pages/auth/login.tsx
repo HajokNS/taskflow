@@ -1,8 +1,8 @@
 import { Head, useForm } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
 import { FormEventHandler } from 'react';
+import { toast, Toaster } from 'sonner'; // або 'react-hot-toast'
 
-import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -30,8 +30,47 @@ export default function Login({ status, canResetPassword }: LoginProps) {
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+
+        // Перевірка на клієнті
+        const validationErrors: string[] = [];
+
+        if (!data.email.trim()) {
+            validationErrors.push("Електронна адреса є обов'язковою");
+        }
+
+        if (!data.password) {
+            validationErrors.push("Пароль є обов'язковим");
+        }
+
+        if (validationErrors.length > 0) {
+            validationErrors.forEach(msg => toast.error(msg));
+            return;
+        }
+
         post(route('login'), {
             onFinish: () => reset('password'),
+            onError: (err) => {
+                Object.values(err).forEach((msg) => {
+                    let errorMessage = Array.isArray(msg) ? msg[0] : msg;
+
+                    // Переклад помилок
+                    switch (errorMessage) {
+                        case 'These credentials do not match our records.':
+                            errorMessage = 'Невірна електронна адреса або пароль';
+                            break;
+                        case 'The email field is required.':
+                            errorMessage = 'Електронна адреса є обов\'язковою';
+                            break;
+                        case 'The password field is required.':
+                            errorMessage = 'Пароль є обов\'язковим';
+                            break;
+                        default:
+                            errorMessage = 'Помилка: ' + errorMessage;
+                    }
+
+                    toast.error(errorMessage);
+                });
+            },
         });
     };
 
@@ -41,15 +80,15 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             description="Введіть свою електронну адресу та пароль для входу"
         >
             <Head title="Вхід" />
+            <Toaster position="top-center" richColors />
 
-            <form className="flex flex-col gap-6" onSubmit={submit}>
+            <form className="flex flex-col gap-6" onSubmit={submit} noValidate>
                 <div className="grid gap-6">
                     <div className="grid gap-2">
                         <Label htmlFor="email">Електронна адреса</Label>
                         <Input
                             id="email"
                             type="email"
-                            required
                             autoFocus
                             tabIndex={1}
                             autoComplete="email"
@@ -57,7 +96,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                             onChange={(e) => setData('email', e.target.value)}
                             placeholder="email@example.com"
                         />
-                        <InputError message={errors.email} />
+                        {/* <InputError message={errors.email} /> */} {/* Прибрано */}
                     </div>
 
                     <div className="grid gap-2">
@@ -72,14 +111,13 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                         <Input
                             id="password"
                             type="password"
-                            required
                             tabIndex={2}
                             autoComplete="current-password"
                             value={data.password}
                             onChange={(e) => setData('password', e.target.value)}
                             placeholder="Пароль"
                         />
-                        <InputError message={errors.password} />
+                        {/* <InputError message={errors.password} /> */} {/* Прибрано */}
                     </div>
 
                     <div className="flex items-center space-x-3">

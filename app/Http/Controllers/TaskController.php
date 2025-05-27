@@ -25,6 +25,9 @@ class TaskController extends Controller
     public function create(Request $request)
     {   
         $boardId = $request->query('board_id');
+
+$board = Board::findOrFail($boardId); // витягуємо дошку
+
         $tasks = Task::where('user_id', $request->user()->id)
                     ->where('board_id', $boardId)
                     ->whereNull('parent_id')
@@ -36,6 +39,7 @@ class TaskController extends Controller
             'tasks' => $tasks,
             'board_id' => $request->input('board_id'),
             'tags' => $tags,
+            'board' => $board, // <-- оце додали
         ]);
     }
 
@@ -128,7 +132,7 @@ class TaskController extends Controller
             
             DB::commit();
     
-            return redirect()->back()->with('success', 'Task updated successfully');
+            return redirect('/tasks')->with('success', 'Task updated successfully');
     
         } catch (\Exception $e) {
             DB::rollBack();
@@ -191,5 +195,11 @@ class TaskController extends Controller
     {
         $this->taskService->markAsCompleted($task);
         return redirect()->back()->with('success', 'Task marked as completed');
+    }
+
+    public function completeSubtask(Task $task)
+    {
+        $this->taskService->markAsCompleted($task);
+        return response()->json('completed successfuly');
     }
 }

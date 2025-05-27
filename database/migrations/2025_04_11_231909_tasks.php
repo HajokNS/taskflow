@@ -13,8 +13,8 @@ return new class extends Migration
             $table->uuid('user_id');
             $table->string('title');
             $table->text('description')->nullable();
-            $table->date('start_date')->nullable();
-            $table->date('end_date')->nullable();
+            $table->timestamp('start_date')->nullable();
+            $table->timestamp('end_date')->nullable();
             $table->enum('priority', ['low', 'medium', 'high'])->nullable();
             $table->enum('risk', ['low', 'medium', 'high'])->nullable();
             $table->enum('status', ['not_started', 'active', 'overdue', 'completed'])->default('not_started');

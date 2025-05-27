@@ -14,10 +14,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import axios from 'axios';
+import { Toaster, toast } from 'sonner';
+
+const MAX_TAG_LENGTH = 20;
 
 interface BreadcrumbItem {
   title: string;
   href: string;
+}
+
+interface Board {
+  id: string;
+  title: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 interface Task {
@@ -34,10 +45,7 @@ interface Task {
   parent_id?: string;
   created_at: string;
   updated_at: string;
-  board: {
-    id: string;
-    title: string;
-  };
+  board: Board;
   tags?: Tag[];
   subtasks?: Task[];
 }
@@ -186,79 +194,97 @@ const TaskItem = ({
   onToggleExpand, 
   isExpanded,
   onMarkAsCompleted
-}: TaskItemProps) => (
-  <div className="space-y-2">
-    <Card 
-      className="border-l-4 hover:shadow-md transition-shadow bg-white/5 backdrop-blur-sm border-white/10 cursor-pointer"
-      onClick={onClick}
-    >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4">
-        <div className="flex items-center gap-2 flex-wrap w-full">
-          <button 
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onMarkAsCompleted(task.id);
-            }}
-            className="flex items-center justify-center"
-          >
-            {task.status === 'completed' ? (
-              <CheckCircle className="text-green-500 w-6 h-6 hover:text-green-400" />
-            ) : (
-              <Circle className="text-gray-400 hover:text-green-500 w-6 h-6" />
-            )}
-          </button>
-          <CardTitle className="text-xl font-semibold text-white break-words overflow-hidden text-ellipsis max-w-full">
-            {task.title}
-          </CardTitle>
-        </div>
-        {task.subtasks && task.subtasks.length > 0 && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="text-white hover:bg-white/10"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleExpand?.();
-            }}
-          >
-            {isExpanded ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-            <span className="ml-1">{task.subtasks.length} підзавдань</span>
-          </Button>
+}: TaskItemProps) => {
+  const allSubtasksCompleted = task.subtasks 
+    ? task.subtasks.every(subtask => subtask.status === 'completed')
+    : false;
+
+  const isEffectivelyCompleted = task.status === 'completed' || 
+    (task.subtasks && task.subtasks.length > 0 && allSubtasksCompleted);
+
+  return (
+    <div className="space-y-2">
+      <Card 
+        className={cn(
+          "border-l-4 hover:shadow-md transition-shadow bg-white/5 backdrop-blur-sm cursor-pointer",
+          isEffectivelyCompleted ? "border-green-500/50" : "border-white/10"
         )}
-      </CardHeader>
-      
-      <CardContent className="px-4">
-        {task.description && (
-          <p className="text-base text-gray-300 mb-3 line-clamp-2 break-words">
-            {task.description}
-          </p>
-        )}
+        onClick={onClick}
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4">
+          <div className="flex items-center gap-2 flex-wrap w-full">
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMarkAsCompleted(task.id);
+              }}
+              className="flex items-center justify-center"
+            >
+              {isEffectivelyCompleted ? (
+                <CheckCircle className="text-green-500 w-6 h-6 hover:text-green-400" />
+              ) : (
+                <Circle className="text-gray-400 hover:text-green-500 w-6 h-6" />
+              )}
+            </button>
+            <CardTitle className={cn(
+              "text-xl font-semibold break-words overflow-hidden text-ellipsis max-w-full",
+              isEffectivelyCompleted ? "text-gray-400 line-through" : "text-white"
+            )}>
+              {task.title}
+            </CardTitle>
+          </div>
+          {task.subtasks && task.subtasks.length > 0 && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-white hover:bg-white/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand?.();
+              }}
+            >
+              {isExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+              <span className="ml-1">{task.subtasks.length} підзавдань</span>
+            </Button>
+          )}
+        </CardHeader>
         
-        <div className="flex flex-wrap items-center gap-2 mt-2">
-          {(task.start_date || task.end_date) && (
-            <DateRangeDisplay start={task.start_date} end={task.end_date} />
+        <CardContent className="px-4">
+          {task.description && (
+            <p className={cn(
+              "text-base mb-3 line-clamp-2 break-words",
+              isEffectivelyCompleted ? "text-gray-400" : "text-gray-300"
+            )}>
+              {task.description}
+            </p>
           )}
           
-          <Badge className={getStatusColor(task.status)}>
-            {getStatusText(task.status)}
-          </Badge>
-          
-          <PriorityBadge priority={task.priority} />
-          <RiskBadge risk={task.risk} />
-          
-          {task.tags?.map((tag) => (
-            <TagBadge key={tag.id} tag={tag} />
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  </div>
-);
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            {(task.start_date || task.end_date) && (
+              <DateRangeDisplay start={task.start_date} end={task.end_date} />
+            )}
+            
+            <Badge className={isEffectivelyCompleted ? getStatusColor('completed') : getStatusColor(task.status)}>
+              {isEffectivelyCompleted ? 'Завершене' : getStatusText(task.status)}
+            </Badge>
+            
+            <PriorityBadge priority={task.priority} />
+            <RiskBadge risk={task.risk} />
+            
+            {task.tags?.map((tag) => (
+              <TagBadge key={tag.id} tag={tag} />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
 
 export default function Tasks({ tasks, filters = {}, availableTags = [] }: { 
   tasks: { data: Task[] }, 
@@ -280,6 +306,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(COLOR_PALETTE[2]);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
+  const [taskList, setTaskList] = useState<Task[]>(tasks.data);
 
   const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -290,36 +317,64 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
 
   const markAsCompleted = async (taskId: string) => {
     try {
+      const updatedTasks = [...taskList];
+      const taskIndex = updatedTasks.findIndex(t => t.id === taskId);
+      if (taskIndex === -1) {
+        toast.error('Завдання не знайдено');
+        return;
+      }
 
-        const task = tasks.data.find(t => t.id === taskId);
-        if (!task && task.status === 'completed') return;
+      const task = updatedTasks[taskIndex];
+      const subtasks = updatedTasks.filter(t => t.parent_id === taskId);
 
+      // Завершити всі підзавдання
+      for (let subtask of subtasks) {
+        try {
+          await axios.post(`/tasks/${subtask.id}/complete-subtask`);
+          const subtaskIndex = updatedTasks.findIndex(t => t.id === subtask.id);
+          if (subtaskIndex !== -1) {
+            updatedTasks[subtaskIndex].status = 'completed';
+          }
+          toast.success(`Підзавдання "${subtask.title}" успішно завершено`);
+        } catch (error) {
+          console.error('Помилка при завершенні підзадачі:', error);
+          toast.error(`Помилка при завершенні підзадачі: ${subtask.title}`);
+        }
+      }
+
+      // Завершити саме завдання
       await router.post(`/tasks/${taskId}/complete`);
-      router.reload();
+      updatedTasks[taskIndex].status = 'completed';
+
+      // Зберегти оновлений список
+      setTaskList(updatedTasks);
+      toast.success('Завдання успішно завершено');
+
     } catch (error) {
       console.error('Помилка при оновленні статусу завдання:', error);
+      toast.error('Не вдалося завершити завдання');
     }
   };
 
   const groupedTasks = useMemo(() => {
-    return tasks.data.reduce((acc: Record<string, { board: { id: string; title: string }, tasks: Task[] }>, task: Task) => {
+    return taskList.reduce((acc, task) => {
       if (!acc[task.board_id]) {
         acc[task.board_id] = {
           board: task.board,
           tasks: []
         };
       }
-      
+
       if (!task.parent_id) {
         acc[task.board_id].tasks.push({
           ...task,
-          subtasks: tasks.data.filter((t: Task) => t.parent_id === task.id)
+          subtasks: taskList.filter(t => t.parent_id === task.id)
         });
       }
-      
+
       return acc;
-    }, {});
-  }, [tasks.data]);
+    }, {} as Record<string, { board: Board, tasks: Task[] }>);
+  }, [taskList]);
 
   const sortTasks = useCallback((tasksToSort: Task[]) => {
     return [...tasksToSort].sort((a, b) => {
@@ -349,12 +404,20 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       .map((group) => ({
         ...group,
         tasks: sortTasks(group.tasks.filter((task) => {
-          const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+          const allSubtasksCompleted = task.subtasks 
+            ? task.subtasks.every(subtask => subtask.status === 'completed')
+            : false;
+
+          const isEffectivelyCompleted = task.status === 'completed' || 
+            (task.subtasks && task.subtasks.length > 0 && allSubtasksCompleted);
+
+          const matchesStatus = statusFilter === 'all' || 
+            (statusFilter === 'completed' ? isEffectivelyCompleted : task.status === statusFilter);
           const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
           const matchesRisk = riskFilter === 'all' || task.risk === riskFilter;
           const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                              task.description?.toLowerCase().includes(searchQuery.toLowerCase());
-          
+                                task.description?.toLowerCase().includes(searchQuery.toLowerCase());
+
           return matchesStatus && matchesPriority && matchesRisk && matchesSearch;
         }))
       }))
@@ -405,8 +468,80 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
     }));
   };
 
+  const validateTaskForm = () => {
+    if (!currentTask) return false;
+
+    if (!currentTask.title.trim()) {
+      toast.error('Назва завдання обов\'язкова');
+      return false;
+    }
+
+    if (currentTask.title.length < 5) {
+      toast.error('Назва завдання повинна містити мінімум 5 символів');
+      return false;
+    }
+
+    if (currentTask.title.length > 100) {
+      toast.error('Назва завдання не може перевищувати 100 символів');
+      return false;
+    }
+
+    if (currentTask.description && currentTask.description.length > 1000) {
+      toast.error('Опис завдання не може перевищувати 1000 символів');
+      return false;
+    }
+
+    const isSubtask = !!currentTask.parent_id;
+    const parentTask = isSubtask ? taskList.find(task => task.id === currentTask.parent_id) : null;
+
+    if (currentTask.start_date && currentTask.end_date && new Date(currentTask.end_date) < new Date(currentTask.start_date)) {
+      toast.error('Кінцева дата не може бути раніше початкової');
+      return false;
+    }
+
+    // Перевірка для підзавдань
+    if (isSubtask && parentTask) {
+      if (currentTask.start_date && parentTask.start_date && new Date(currentTask.start_date) < new Date(parentTask.start_date)) {
+        toast.error('Дата початку підзавдання не може бути раніше головного завдання');
+        return false;
+      }
+      
+      if (currentTask.end_date && parentTask.end_date && new Date(currentTask.end_date) > new Date(parentTask.end_date)) {
+        toast.error('Дата завершення підзавдання не може бути пізніше головного завдання');
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   const handleStartDateChange = (date: Date | undefined) => {
     if (!date || !currentTask) return;
+
+    const boardDeadline = currentTask.board.end_date ? new Date(currentTask.board.end_date) : null;
+    const boardStartDate = currentTask.board.start_date ? new Date(currentTask.board.start_date) : null;
+    const isSubtask = !!currentTask.parent_id;
+    const parentTask = isSubtask ? taskList.find(task => task.id === currentTask.parent_id) : null;
+
+    if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
+    if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
+
+    // Перевірка для підзавдань
+    if (isSubtask && parentTask?.start_date && date < new Date(parentTask.start_date)) {
+      toast.error(`Дата не може бути раніше батьківського завдання (${format(new Date(parentTask.start_date), 'dd.MM.yyyy')})`);
+      return;
+    }
+
+    if (boardStartDate && date < boardStartDate) {
+      toast.error(`Дата не може бути раніше початку дошки (${format(boardStartDate, 'dd.MM.yyyy')})`);
+      return;
+    }
+    
+    if (boardDeadline && date > boardDeadline) {
+      toast.error(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline, 'dd.MM.yyyy')})`);
+      return;
+    }
+
     const newDate = new Date(date);
     if (currentTask.start_date) {
       const prevDate = new Date(currentTask.start_date);
@@ -418,6 +553,36 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
 
   const handleEndDateChange = (date: Date | undefined) => {
     if (!date || !currentTask) return;
+
+    const boardDeadline = currentTask.board.end_date ? new Date(currentTask.board.end_date) : null;
+    const boardStartDate = currentTask.board.start_date ? new Date(currentTask.board.start_date) : null;
+    const isSubtask = !!currentTask.parent_id;
+    const parentTask = isSubtask ? taskList.find(task => task.id === currentTask.parent_id) : null;
+
+    if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
+    if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
+
+    // Перевірка для підзавдань
+    if (isSubtask && parentTask?.end_date && date > new Date(parentTask.end_date)) {
+      toast.error(`Дата не може бути пізніше батьківського завдання (${format(new Date(parentTask.end_date), 'dd.MM.yyyy')})`);
+      return;
+    }
+
+    if (boardStartDate && date < boardStartDate) {
+      toast.error(`Дата не може бути раніше початку дошки (${format(boardStartDate, 'dd.MM.yyyy')})`);
+      return;
+    }
+    
+    if (boardDeadline && date > boardDeadline) {
+      toast.error(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline, 'dd.MM.yyyy')})`);
+      return;
+    }
+
+    if (currentTask.start_date && date < new Date(currentTask.start_date)) {
+      toast.error('Кінцева дата не може бути раніше початкової');
+      return;
+    }
+
     const newDate = new Date(date);
     if (currentTask.end_date) {
       const prevDate = new Date(currentTask.end_date);
@@ -436,25 +601,77 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
   };
 
   const handleCreateTag = async () => {
-    if (!newTagName.trim()) return;
+    if (!newTagName.trim()) {
+      toast.error('Назва тегу не може бути порожньою');
+      return;
+    }
+
+    if (newTagName.length > MAX_TAG_LENGTH) {
+      toast.error(`Назва тегу не може перевищувати ${MAX_TAG_LENGTH} символів`);
+      return;
+    }
+
+    // Перевірка на існуючий тег
+    const tagExists = availableTags.some(
+      tag => tag.name.toLowerCase() === newTagName.trim().toLowerCase()
+    );
+
+    if (tagExists) {
+      toast.error('Тег з такою назвою вже існує');
+      return;
+    }
+
     setIsCreatingTag(true);
-    
+
     try {
-      await router.post('/tags', {
+      await router.post(route('tags.store'), {
         name: newTagName,
         color: newTagColor
+      }, {
+        onSuccess: () => {
+          setNewTagName('');
+          setTagSearch('');
+          toast.success('Тег успішно створено');
+          router.reload({ only: ['tags'] });
+        },
+        onError: (errors) => {
+          if (errors.name) {
+            toast.error(errors.name);
+          } else {
+            toast.error('Помилка при створенні тегу');
+          }
+        }
       });
-      
-      setNewTagName('');
-      setTagSearch('');
-      router.reload({ only: ['availableTags'] });
+    } catch (error) {
+      toast.error('Сталася помилка при створенні тегу');
     } finally {
       setIsCreatingTag(false);
     }
   };
 
   const updateTask = async () => {
-    if (!currentTask) return;
+    if (!currentTask || !validateTaskForm()) return;
+
+    const boardDeadline = currentTask.board.end_date ? new Date(currentTask.board.end_date) : null;
+    const boardStartDate = currentTask.board.start_date ? new Date(currentTask.board.start_date) : null;
+    const isSubtask = !!currentTask.parent_id;
+    const parentTask = isSubtask ? taskList.find(task => task.id === currentTask.parent_id) : null;
+
+    if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
+    if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
+
+    // Додаткові перевірки для підзавдань
+    if (isSubtask && parentTask) {
+      if (currentTask.start_date && parentTask.start_date && new Date(currentTask.start_date) < new Date(parentTask.start_date)) {
+        toast.error('Дата початку підзавдання не може бути раніше батьківського завдання');
+        return;
+      }
+      
+      if (currentTask.end_date && parentTask.end_date && new Date(currentTask.end_date) > new Date(parentTask.end_date)) {
+        toast.error('Дата завершення підзавдання не може бути пізніше батьківського завдання');
+        return;
+      }
+    }
 
     try {
       await router.put(`/tasks/${currentTask.id}`, {
@@ -465,25 +682,78 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
         priority: currentTask.priority,
         risk: currentTask.risk,
         tags: selectedTags
+      }, {
+        onSuccess: () => {
+          toast.success('Завдання успішно оновлено');
+          setIsEditModalOpen(false);
+          setTaskList((prev) =>
+            prev.map((task) =>
+              task.id === currentTask.id
+                ? { ...task, ...currentTask, tags: availableTags.filter(tag => selectedTags.includes(tag.id)) }
+                : task
+            )
+          );
+        },
+        onError: (errors) => {
+          if (errors.title) {
+            toast.error(errors.title);
+          } else if (errors.start_date) {
+            toast.error(errors.start_date);
+          } else if (errors.end_date) {
+            toast.error(errors.end_date);
+          } else {
+            toast.error('Помилка при оновленні завдання');
+          }
+        }
       });
-      
-      setIsEditModalOpen(false);
-      router.reload({ only: ['tasks'] });
     } catch (error) {
       console.error('Помилка при оновленні завдання:', error);
+      toast.error('Сталася помилка при оновленні завдання');
     }
   };
 
   const deleteTask = async () => {
     if (!currentTask) return;
+    
+    toast('Ви впевнені, що хочете видалити це завдання?', {
+      action: {
+        label: 'Видалити',
+        onClick: async () => {
+          try {
+            const promise = router.delete(`/tasks/${currentTask.id}`, {
+              onSuccess: () => {
+                setIsEditModalOpen(false);
+                setTaskList(prev => 
+                  prev.filter(task => 
+                    task.id !== currentTask.id && task.parent_id !== currentTask.id
+                  )
+                );
+              }
+            });
 
-    try {
-      await router.delete(`/tasks/${currentTask.id}`);
-      setIsEditModalOpen(false);
-      router.reload({ only: ['tasks'] });
-    } catch (error) {
-      console.error('Помилка при видаленні завдання:', error);
-    }
+            toast.promise(promise, {
+              loading: 'Видалення завдання...',
+              success: () => {
+                return 'Завдання успішно видалено';
+              },
+              error: () => {
+                return 'Не вдалося видалити завдання';
+              }
+            });
+
+            await promise;
+          } catch (error) {
+            console.error('Помилка при видаленні завдання:', error);
+            toast.error('Сталася помилка при видаленні завдання');
+          }
+        }
+      },
+      cancel: {
+        label: 'Скасувати',
+        onClick: () => {}
+      },
+      duration: 10000
+    });
   };
 
   const clearAllFilters = () => {
@@ -492,11 +762,13 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
     setPriorityFilter('all');
     setRiskFilter('all');
     setIsSearching(true);
+    toast.success('Всі фільтри скинуті');
   };
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Мої завдання" />
+      <Toaster position="top-center" richColors />
       
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -778,7 +1050,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                     onChange={(e) => handleTaskUpdate('title', e.target.value)}
                     placeholder="Назва завдання"
                     className="text-xl"
-                    required
                   />
                 </div>
 
@@ -812,6 +1083,21 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                               selected={currentTask.start_date ? new Date(currentTask.start_date) : undefined}
                               onSelect={handleStartDateChange}
                               initialFocus
+                              disabled={(date) => {
+                                const boardDeadline = currentTask.board.end_date ? new Date(currentTask.board.end_date) : null;
+                                const boardStartDate = currentTask.board.start_date ? new Date(currentTask.board.start_date) : null;
+                                const isSubtask = !!currentTask.parent_id;
+                                const parentTask = isSubtask ? taskList.find(task => task.id === currentTask.parent_id) : null;
+
+                                if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
+                                if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
+
+                                // Для підзавдань - не можна вибрати дату раніше батьківського завдання
+                                if (isSubtask && parentTask?.start_date && date < new Date(parentTask.start_date)) return true;
+                                if (boardStartDate && date < boardStartDate) return true;
+                                if (boardDeadline && date > boardDeadline) return true;
+                                return false;
+                              }}
                             />
                           </PopoverContent>
                         </Popover>
@@ -866,15 +1152,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                           </SelectContent>
                         </Select>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => handleTaskUpdate('start_date', null)}
-                        disabled={!currentTask.start_date}
-                        className="px-3"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      
                     </div>
                   </div>
 
@@ -898,6 +1176,22 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                               selected={currentTask.end_date ? new Date(currentTask.end_date) : undefined}
                               onSelect={handleEndDateChange}
                               initialFocus
+                              disabled={(date) => {
+                                const boardDeadline = currentTask.board.end_date ? new Date(currentTask.board.end_date) : null;
+                                const boardStartDate = currentTask.board.start_date ? new Date(currentTask.board.start_date) : null;
+                                const isSubtask = !!currentTask.parent_id;
+                                const parentTask = isSubtask ? taskList.find(task => task.id === currentTask.parent_id) : null;
+
+                                if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
+                                if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
+
+                                // Для підзавдань - не можна вибрати дату пізніше батьківського завдання
+                                if (isSubtask && parentTask?.end_date && date > new Date(parentTask.end_date)) return true;
+                                if (boardStartDate && date < boardStartDate) return true;
+                                if (boardDeadline && date > boardDeadline) return true;
+                                if (currentTask.start_date && date < new Date(currentTask.start_date)) return true;
+                                return false;
+                              }}
                             />
                           </PopoverContent>
                         </Popover>
@@ -952,15 +1246,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                           </SelectContent>
                         </Select>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => handleTaskUpdate('end_date', null)}
-                        disabled={!currentTask.end_date}
-                        className="px-3"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      
                     </div>
                   </div>
                 </div>
@@ -1037,13 +1323,17 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                           className="mb-2"
                         />
                         
-                        <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2 p-2 rounded-lg">
                           <Input
                             placeholder="Новий тег"
                             value={newTagName}
                             onChange={(e) => setNewTagName(e.target.value)}
                             className="flex-1"
-                          />
+                            maxLength={MAX_TAG_LENGTH}
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              {newTagName.length}/{MAX_TAG_LENGTH}
+                            </span>
                           <Popover>
                             <PopoverTrigger asChild>
                               <button

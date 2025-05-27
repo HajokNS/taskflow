@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from 'sonner';
+import { toast, Toaster } from 'sonner';
 import axios from 'axios';
 
 interface User {
@@ -65,9 +65,28 @@ export default function AdminIndex({ users = [] }: { users: User[] }) {
   };
 
   const handleDeleteClick = (user: User) => {
-    setUserToDelete(user);
-    setDeleteDialogOpen(true);
-  };
+  toast('Ви впевнені, що хочете видалити цього користувача?', {
+    description: `Користувач: ${user.name} (${user.email})`,
+    action: {
+      label: 'Видалити',
+      onClick: async () => {
+        try {
+          await axios.post(`/admin/users/${user.id}`);
+          toast.success('Користувача успішно видалено');
+          router.reload();
+        } catch (error) {
+          toast.error('Не вдалося видалити користувача');
+          console.error('Помилка видалення:', error);
+        }
+      }
+    },
+    cancel: {
+      label: 'Скасувати',
+      onClick: () => {}
+    },
+    duration: 10000 // Час показу тоаста (10 секунд)
+  });
+};
 
   const confirmDelete = async () => {
   if (!userToDelete) return;
@@ -103,7 +122,7 @@ export default function AdminIndex({ users = [] }: { users: User[] }) {
   return (
     <AppLayout>
       <Head title="Адмін-панель" />
-      
+      <Toaster position="top-center" richColors/>
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Керування користувачами</h1>
@@ -168,10 +187,7 @@ export default function AdminIndex({ users = [] }: { users: User[] }) {
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => {
-                          setUserToDelete(user);
-                          setDeleteDialogOpen(true);
-                        }}
+                        onClick={() => handleDeleteClick(user)}
                         disabled={user.is_admin}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
@@ -192,90 +208,66 @@ export default function AdminIndex({ users = [] }: { users: User[] }) {
         </div>
       </div>
 
-      {/* Діалог підтвердження видалення */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Підтвердіть видалення</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p>Ви впевнені, що хочете видалити користувача <strong>{userToDelete?.name}</strong>?</p>
-            <p className="text-muted-foreground text-sm mt-2">Email: {userToDelete?.email}</p>
-            <p className="text-destructive mt-4">Цю дію неможливо скасувати!</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Скасувати
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              Видалити
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Діалог редагування користувача */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Редагування користувача</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Ім'я
-              </Label>
-              <Input
-                id="name"
-                value={data.name}
-                onChange={(e) => setData('name', e.target.value)}
-                className="col-span-3"
-              />
-              {errors.name && <p className="col-span-4 text-right text-sm text-destructive">{errors.name}</p>}
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={data.email}
-                onChange={(e) => setData('email', e.target.value)}
-                className="col-span-3"
-              />
-              {errors.email && <p className="col-span-4 text-right text-sm text-destructive">{errors.email}</p>}
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="role" className="text-right">
-                Роль
-              </Label>
-              <Select
-                value={data.is_admin ? 'admin' : 'user'}
-                onValueChange={(value) => setData('is_admin', value === 'admin')}
-              >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Оберіть роль" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Адміністратор</SelectItem>
-                  <SelectItem value="user">Користувач</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-              Скасувати
-            </Button>
-            <Button onClick={handleSaveEdit} disabled={processing}>
-              {processing ? 'Збереження...' : 'Зберегти зміни'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+  <DialogContent className="text-left"> {/* Додаємо text-left */}
+    <DialogHeader>
+      <DialogTitle className="text-left">Редагування користувача</DialogTitle> {/* Вирівнюємо заголовок */}
+    </DialogHeader>
+    <div className="space-y-4"> {/* Замінюємо grid на простіший spacing */}
+      <div className="space-y-2"> {/* Групуємо Label і Input разом */}
+        <Label htmlFor="name" className="block"> {/* Додаємо block */}
+          Ім'я
+        </Label>
+        <Input
+          id="name"
+          value={data.name}
+          onChange={(e) => setData('name', e.target.value)}
+        />
+        {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="email" className="block">
+          Email
+        </Label>
+        <Input
+          id="email"
+          type="email"
+          value={data.email}
+          onChange={(e) => setData('email', e.target.value)}
+        />
+        {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="role" className="block">
+          Роль
+        </Label>
+        <Select
+          value={data.is_admin ? 'admin' : 'user'}
+          onValueChange={(value) => setData('is_admin', value === 'admin')}
+        >
+          <SelectTrigger className="w-full"> {/* Додаємо w-full */}
+            <SelectValue placeholder="Оберіть роль" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="admin">Адміністратор</SelectItem>
+            <SelectItem value="user">Користувач</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+    <DialogFooter className="justify-start"> {/* Вирівнюємо кнопки по лівому краю */}
+      <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+        Скасувати
+      </Button>
+      <Button onClick={handleSaveEdit} disabled={processing}>
+        {processing ? 'Збереження...' : 'Зберегти зміни'}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
     </AppLayout>
   );
 }

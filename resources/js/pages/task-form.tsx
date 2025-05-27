@@ -11,11 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import axios from 'axios';
+import { toast } from 'sonner';
+import { Toaster } from 'sonner';
 
 const COLOR_PALETTE = [
     '#FFFFFF', '#000000', '#FF6900', '#FCB900', '#7BDCB5',
     '#8ED1FC', '#0693E3', '#ABB8C3', '#EB144C', '#00D084'
 ];
+
+const MAX_TAG_LENGTH = 20;
 
 export default function TaskCreator() {
     const { props } = usePage();
@@ -89,6 +93,11 @@ export default function TaskCreator() {
         return date >= today;
     };
 
+    const boardStartDate = props.board?.start_date ? new Date(props.board.start_date) : null;
+    if (boardStartDate) {
+        boardStartDate.setHours(0, 0, 0, 0);
+    }
+
     const isDateWithinBoardDeadline = (date: Date) => {
         if (!boardDeadline) return true;
         return date <= boardDeadline;
@@ -101,12 +110,17 @@ export default function TaskCreator() {
         today.setHours(0, 0, 0, 0);
 
         if (!isDateValid(date)) {
-            alert('Не можна встановити дату в минулому');
+            toast.error('Не можна встановити дату в минулому');
+            return;
+        }
+
+        if (boardStartDate && date < boardStartDate) {
+            toast.error(`Дата не може бути раніше початку дошки (${format(boardStartDate, 'PPP')})`);
             return;
         }
 
         if (!isDateWithinBoardDeadline(date)) {
-            alert(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline!, 'PPP')})`);
+            toast.error(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline!, 'PPP')})`);
             return;
         }
 
@@ -126,20 +140,25 @@ export default function TaskCreator() {
         today.setHours(0, 0, 0, 0);
 
         if (!isDateValid(date)) {
-            alert('Не можна встановити дату в минулому');
+            toast.error('Не можна встановити дату в минулому');
             return;
         }
 
         if (taskData.start_date) {
             const startDate = new Date(taskData.start_date);
             if (date < startDate) {
-                alert('Кінцева дата не може бути раніше початкової');
+                toast.error('Кінцева дата не може бути раніше початкової');
                 return;
             }
         }
 
+        if (boardStartDate && date < boardStartDate) {
+            toast.error(`Дата не може бути раніше початку дошки (${format(boardStartDate, 'PPP')})`);
+            return;
+        }
+
         if (!isDateWithinBoardDeadline(date)) {
-            alert(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline!, 'PPP')})`);
+            toast.error(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline!, 'PPP')})`);
             return;
         }
 
@@ -159,12 +178,36 @@ export default function TaskCreator() {
         today.setHours(0, 0, 0, 0);
 
         if (!isDateValid(date)) {
-            alert('Не можна встановити дату в минулому');
+            toast.error('Не можна встановити дату в минулому');
             return;
         }
 
         if (!isDateWithinBoardDeadline(date)) {
-            alert(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline!, 'PPP')})`);
+            toast.error(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline!, 'PPP')})`);
+            return;
+        }
+
+        let parentStartDate: Date | null = null;
+        let parentEndDate: Date | null = null;
+        
+        if (mode === 'subtasks' && selectedTask) {
+            const parentTask = availableTasks.find(t => t.id === selectedTask);
+            if (parentTask) {
+                parentStartDate = parentTask.start_date ? new Date(parentTask.start_date) : null;
+                parentEndDate = parentTask.end_date ? new Date(parentTask.end_date) : null;
+            }
+        } else if (mode === 'task') {
+            parentStartDate = taskData.start_date ? new Date(taskData.start_date) : null;
+            parentEndDate = taskData.end_date ? new Date(taskData.end_date) : null;
+        }
+
+        if (parentStartDate && date < parentStartDate) {
+            toast.error(`Дата початку підзадачі не може бути раніше початку основного завдання (${format(parentStartDate, 'PPP')})`);
+            return;
+        }
+
+        if (parentEndDate && date > parentEndDate) {
+            toast.error(`Дата початку підзадачі не може бути пізніше завершення основного завдання (${format(parentEndDate, 'PPP')})`);
             return;
         }
 
@@ -184,20 +227,44 @@ export default function TaskCreator() {
         today.setHours(0, 0, 0, 0);
 
         if (!isDateValid(date)) {
-            alert('Не можна встановити дату в минулому');
+            toast.error('Не можна встановити дату в минулому');
             return;
         }
 
         if (subtasks[index].start_date) {
             const startDate = new Date(subtasks[index].start_date);
             if (date < startDate) {
-                alert('Кінцева дата не може бути раніше початкової');
+                toast.error('Кінцева дата не може бути раніше початкової');
                 return;
             }
         }
 
         if (!isDateWithinBoardDeadline(date)) {
-            alert(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline!, 'PPP')})`);
+            toast.error(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline!, 'PPP')})`);
+            return;
+        }
+
+        let parentStartDate: Date | null = null;
+        let parentEndDate: Date | null = null;
+        
+        if (mode === 'subtasks' && selectedTask) {
+            const parentTask = availableTasks.find(t => t.id === selectedTask);
+            if (parentTask) {
+                parentStartDate = parentTask.start_date ? new Date(parentTask.start_date) : null;
+                parentEndDate = parentTask.end_date ? new Date(parentTask.end_date) : null;
+            }
+        } else if (mode === 'task') {
+            parentStartDate = taskData.start_date ? new Date(taskData.start_date) : null;
+            parentEndDate = taskData.end_date ? new Date(taskData.end_date) : null;
+        }
+
+        if (parentStartDate && date < parentStartDate) {
+            toast.error(`Дата завершення підзадачі не може бути раніше початку основного завдання (${format(parentStartDate, 'PPP')})`);
+            return;
+        }
+
+        if (parentEndDate && date > parentEndDate) {
+            toast.error(`Дата завершення підзадачі не може бути пізніше завершення основного завдання (${format(parentEndDate, 'PPP')})`);
             return;
         }
 
@@ -213,7 +280,7 @@ export default function TaskCreator() {
     const CalendarMainTask = ({ type }: { type: 'start' | 'end' }) => (
         <Calendar
             mode="single"
-            selected={type === 'start' 
+            selected={type === 'start'
                 ? (taskData.start_date ? new Date(taskData.start_date) : undefined)
                 : (taskData.end_date ? new Date(taskData.end_date) : undefined)}
             onSelect={type === 'start' ? handleTaskStartDateChange : handleTaskEndDateChange}
@@ -222,53 +289,74 @@ export default function TaskCreator() {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
 
+                if (boardStartDate && date < boardStartDate) return true;
+
                 if (type === 'end' && taskData.start_date) {
                     const startDate = new Date(taskData.start_date);
                     startDate.setHours(0, 0, 0, 0);
                     if (date < startDate) return true;
                 }
 
-                if (type === 'start' && date < today) return true;
+                if (date < today) return true;
 
-                if (boardDeadline) {
-                    return date > boardDeadline;
-                }
+                if (boardDeadline && date > boardDeadline) return true;
 
                 return false;
             }}
         />
     );
 
-    const CalendarSubtask = ({ index, type }: { index: number, type: 'start' | 'end' }) => (
-        <Calendar
-            mode="single"
-            selected={type === 'start' 
-                ? (subtasks[index].start_date ? new Date(subtasks[index].start_date) : undefined)
-                : (subtasks[index].end_date ? new Date(subtasks[index].end_date) : undefined)}
-            onSelect={type === 'start' 
-                ? (date) => handleSubtaskStartDateChange(index, date)
-                : (date) => handleSubtaskEndDateChange(index, date)}
-            initialFocus
-            disabled={(date) => {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-
-                if (type === 'end' && subtasks[index].start_date) {
-                    const startDate = new Date(subtasks[index].start_date);
-                    startDate.setHours(0, 0, 0, 0);
-                    if (date < startDate) return true;
-                }
-
-                if (type === 'start' && date < today) return true;
-
-                if (boardDeadline) {
-                    return date > boardDeadline;
-                }
-
-                return false;
-            }}
-        />
+    const availableParentTasks = availableTasks.filter(task => 
+        !task.is_completed && task.status !== 'completed'
     );
+
+    const CalendarSubtask = ({ index, type }: { index: number, type: 'start' | 'end' }) => {
+        let parentStartDate: Date | null = null;
+        let parentEndDate: Date | null = null;
+        
+        if (mode === 'subtasks' && selectedTask) {
+            const parentTask = availableTasks.find(t => t.id === selectedTask);
+            if (parentTask) {
+                parentStartDate = parentTask.start_date ? new Date(parentTask.start_date) : null;
+                parentEndDate = parentTask.end_date ? new Date(parentTask.end_date) : null;
+            }
+        } else if (mode === 'task') {
+            parentStartDate = taskData.start_date ? new Date(taskData.start_date) : null;
+            parentEndDate = taskData.end_date ? new Date(taskData.end_date) : null;
+        }
+
+        return (
+            <Calendar
+                mode="single"
+                selected={type === 'start' 
+                    ? (subtasks[index].start_date ? new Date(subtasks[index].start_date) : undefined)
+                    : (subtasks[index].end_date ? new Date(subtasks[index].end_date) : undefined)}
+                onSelect={type === 'start' 
+                    ? (date) => handleSubtaskStartDateChange(index, date)
+                    : (date) => handleSubtaskEndDateChange(index, date)}
+                initialFocus
+                disabled={(date) => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    if (type === 'start' && date < today) return true;
+
+                    if (type === 'end' && subtasks[index].start_date) {
+                        const startDate = new Date(subtasks[index].start_date);
+                        startDate.setHours(0, 0, 0, 0);
+                        if (date < startDate) return true;
+                    }
+
+                    if (parentStartDate && date < parentStartDate) return true;
+                    if (parentEndDate && date > parentEndDate) return true;
+
+                    if (boardDeadline && date > boardDeadline) return true;
+
+                    return false;
+                }}
+            />
+        );
+    };
 
     const addSubtask = () => {
         setSubtasks([...subtasks, {
@@ -288,7 +376,10 @@ export default function TaskCreator() {
     };
 
     const removeSubtask = (index: number) => {
-        if (subtasks.length <= 1) return;
+        if (subtasks.length <= 1) {
+            toast.error('Повинна залишитися хоча б одна підзадача');
+            return;
+        }
         const newSubtasks = [...subtasks];
         newSubtasks.splice(index, 1);
         setSubtasks(newSubtasks);
@@ -347,98 +438,232 @@ export default function TaskCreator() {
     };
 
     const handleCreateTag = async () => {
-        if (!newTagName.trim()) return;
-        setIsCreatingTag(true);
+              if (!newTagName.trim()) {
+                  toast.error('Назва тегу не може бути порожньою');
+                  return;
+              }
+      
+              if (newTagName.length > MAX_TAG_LENGTH) {
+                  toast.error(`Назва тегу не може перевищувати ${MAX_TAG_LENGTH} символів`);
+                  return;
+              }
+    
+              // Перевірка на існуючий тег
+        const tagExists = availableTags.some(
+          tag => tag.name.toLowerCase() === newTagName.trim().toLowerCase()
+        );
+    
+        if (tagExists) {
+          toast.error('Тег з такою назвою вже існує');
+          return;
+        }
+      
+              setIsCreatingTag(true);
+      
+              try {
+                  await router.post(route('tags.store'), {
+                      name: newTagName,
+                      color: newTagColor
+                  }, {
+                      onSuccess: () => {
+                          setNewTagName('');
+                          setTagSearch('');
+                          toast.success('Тег успішно створено');
+                          router.reload({ only: ['tags'] });
+                      },
+                      onError: (errors) => {
+                          if (errors.name) {
+                              toast.error(errors.name);
+                          } else {
+                              toast.error('Помилка при створенні тегу');
+                          }
+                      }
+                  });
+              } catch (error) {
+                  toast.error('Сталася помилка при створенні тегу');
+              } finally {
+                  setIsCreatingTag(false);
+              }
+          };
 
-        router.post(route('tags.store'), {
-            name: newTagName,
-            color: newTagColor
-        }, {
-            onSuccess: () => {
-                setNewTagName('');
-                setTagSearch('');
-                router.reload({ only: ['tags'] });
-            },
-            onError: () => {
-                console.error('Помилка при створенні тегу');
-            },
-            onFinish: () => {
-                setIsCreatingTag(false);
-            }
-        });
+    const validateTask = () => {
+        if (!taskData.title.trim()) {
+            toast.error('Назва завдання обов\'язкова');
+            return false;
+        }
+
+        if (taskData.title.length < 5) {
+            toast.error('Назва завдання повинна містити мінімум 5 символів');
+            return false;
+        }
+
+        if (taskData.title.length > 100) {
+            toast.error('Назва завдання не може перевищувати 100 символів');
+            return false;
+        }
+
+        if (taskData.description && taskData.description.length > 1000) {
+            toast.error('Опис завдання не може перевищувати 1000 символів');
+            return false;
+        }
+
+        if (!taskData.start_date) {
+            toast.error('Будь ласка, вкажіть початкову дату');
+            return false;
+        }
+
+        if (!taskData.end_date) {
+            toast.error('Будь ласка, вкажіть кінцеву дату');
+            return false;
+        }
+
+        return true;
     };
 
-   const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsProcessing(true);
-
-    if (mode === 'task') {
-        let hasError = false;
-        try {
-            // Готуємо дані без статусу
-            const taskPayload = {
-                title: taskData.title,
-                description: taskData.description,
-                start_date: taskData.start_date || null,
-                end_date: taskData.end_date || null,
-                priority: taskData.priority,
-                risk: taskData.risk,
-                board_id: taskData.board_id,
-                tags: selectedTags,
-                parent_id: null
-            };
-
-            await axios.post(route('tasks.store'), taskPayload);
-        } catch (error) {
-            hasError = true;
-            console.error('Помилка при створенні завдання:', error);
-        }
-
-        if (!hasError) {
-            router.visit(`/boards/${board_id}`);
-        } else {
-            alert('Трапилася помилка під час створення завдання');
-        }
-    } else if (mode === 'subtasks') {
-        if (!selectedTask) {
-            alert('Будь ласка, оберіть основне завдання');
-            setIsProcessing(false);
-            return;
-        }
-
-        let hasError = false;
-
-        for (const subtask of subtasks) {
-            try {
-                // Готуємо дані підзадачі без статусу
-                const subtaskPayload = {
-                    title: subtask.title,
-                    description: subtask.description,
-                    start_date: subtask.start_date || null,
-                    end_date: subtask.end_date || null,
-                    priority: subtask.priority,
-                    risk: subtask.risk,
-                    board_id: board_id,
-                    tags: subtask.tags,
-                    parent_id: selectedTask
-                };
-
-                await axios.post(route('tasks.store'), subtaskPayload);
-            } catch (error) {
-                hasError = true;
-                console.error('Помилка при створенні підзадачі:', error);
+    const validateTaskDates = () => {
+        if (taskData.start_date && taskData.end_date) {
+            const startDate = new Date(taskData.start_date);
+            const endDate = new Date(taskData.end_date);
+            if (endDate < startDate) {
+                toast.error('Кінцева дата не може бути раніше початкової');
+                return false;
             }
         }
+        return true;
+    };
 
-        if (!hasError) {
-            router.visit(`/boards/${board_id}`);
-        } else {
-            alert('Деякі підзадачі не були створені');
+    const validateSubtasks = () => {
+        for (const [index, subtask] of subtasks.entries()) {
+            if (!subtask.title.trim()) {
+                toast.error(`Підзадача ${index + 1}: назва обов'язкова`);
+                return false;
+            }
+
+            if (subtask.title.length < 5) {
+                toast.error(`Підзадача ${index + 1}: назва повинна містити мінімум 5 символів`);
+                return false;
+            }
+
+            if (subtask.title.length > 100) {
+                toast.error(`Підзадача ${index + 1}: назва не може перевищувати 100 символів`);
+                return false;
+            }
+
+            if (subtask.description && subtask.description.length > 1000) {
+                toast.error(`Підзадача ${index + 1}: опис не може перевищувати 1000 символів`);
+                return false;
+            }
+
+            if (!subtask.start_date) {
+                toast.error(`Підзадача ${index + 1}: будь ласка, вкажіть початкову дату`);
+                return false;
+            }
+
+            if (!subtask.end_date) {
+                toast.error(`Підзадача ${index + 1}: будь ласка, вкажіть кінцеву дату`);
+                return false;
+            }
         }
-    }
+        return true;
+    };
 
-    setIsProcessing(false);
-};
+    const validateSubtaskDates = (index: number) => {
+        const subtask = subtasks[index];
+        if (subtask.start_date && subtask.end_date) {
+            const startDate = new Date(subtask.start_date);
+            const endDate = new Date(subtask.end_date);
+            if (endDate < startDate) {
+                toast.error(`Підзадача ${index + 1}: кінцева дата не може бути раніше початкової`);
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const submit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsProcessing(true);
+
+        try {
+            if (mode === 'task') {
+                if (!validateTask() || !validateTaskDates()) {
+                    return;
+                }
+
+                const taskPayload = {
+                    title: taskData.title,
+                    description: taskData.description,
+                    start_date: taskData.start_date || null,
+                    end_date: taskData.end_date || null,
+                    priority: taskData.priority,
+                    risk: taskData.risk,
+                    board_id: taskData.board_id,
+                    tags: selectedTags,
+                    parent_id: null
+                };
+
+                await axios.post(route('tasks.store'), taskPayload);
+                toast.success('Завдання успішно створено');
+                router.visit(`/boards/${board_id}`);
+            } else if (mode === 'subtasks') {
+                if (!selectedTask) {
+                    toast.error('Будь ласка, оберіть основне завдання');
+                    return;
+                }
+
+                if (!validateSubtasks()) {
+                    return;
+                }
+
+                // Додаткова перевірка дат для всіх підзадач
+                for (let i = 0; i < subtasks.length; i++) {
+                    if (!validateSubtaskDates(i)) {
+                        return;
+                    }
+                }
+
+                let successCount = 0;
+                const promises = subtasks.map(subtask => {
+                    const subtaskPayload = {
+                        title: subtask.title,
+                        description: subtask.description,
+                        start_date: subtask.start_date || null,
+                        end_date: subtask.end_date || null,
+                        priority: subtask.priority,
+                        risk: subtask.risk,
+                        board_id: board_id,
+                        tags: subtask.tags,
+                        parent_id: selectedTask
+                    };
+
+                    return axios.post(route('tasks.store'), subtaskPayload)
+                        .then(() => successCount++)
+                        .catch(error => {
+                            console.error('Помилка при створенні підзадачі:', error);
+                            toast.error(`Помилка при створенні підзадачі: ${subtask.title}`);
+                        });
+                });
+
+                await Promise.all(promises);
+
+                if (successCount === subtasks.length) {
+                    toast.success(`Усі підзадачі (${successCount}) успішно створені`);
+                } else if (successCount > 0) {
+                    toast.warning(`Створено ${successCount} з ${subtasks.length} підзадач`);
+                } else {
+                    toast.error('Не вдалося створити жодної підзадачі');
+                    return;
+                }
+
+                router.visit(`/boards/${board_id}`);
+            }
+        } catch (error) {
+            console.error('Помилка при створенні:', error);
+            toast.error('Сталася помилка при збереженні');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -462,13 +687,17 @@ export default function TaskCreator() {
                     className="mb-2"
                 />
 
-                <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="flex items-center gap-2 mb-2 p-2 rounded-lg">
                     <Input
                         placeholder="Новий тег"
                         value={newTagName}
                         onChange={(e) => setNewTagName(e.target.value)}
                         className="flex-1"
+                        maxLength={MAX_TAG_LENGTH}
                     />
+                    <span className="text-xs text-muted-foreground">
+                        {newTagName.length}/{MAX_TAG_LENGTH}
+                    </span>
                     <Popover>
                         <PopoverTrigger asChild>
                             <button
@@ -605,6 +834,7 @@ export default function TaskCreator() {
 
     return (
         <AppLayout>
+            <Toaster position="top-center" richColors />
             <Head title="Створення завдань" />
 
             <div className="container mx-auto px-4 py-8">
@@ -616,15 +846,7 @@ export default function TaskCreator() {
                 </div>
 
                 {errors.message && (
-                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                        {errors.message}
-                    </div>
-                )}
-
-                {boardDeadline && (
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 text-blue-700 rounded">
-                        Дедлайн дошки: {format(boardDeadline, 'PPP')}
-                    </div>
+                    toast.error(errors.message)
                 )}
 
                 <div className="max-w-3xl mx-auto">
@@ -655,25 +877,31 @@ export default function TaskCreator() {
                                     <Select
                                         value={selectedTask}
                                         onValueChange={handleSetSelectedTask}
-                                        required
                                     >
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Оберіть завдання" />
+                                            <SelectValue placeholder={
+                                                availableParentTasks.length === 0 
+                                                    ? "Немає активних завдань" 
+                                                    : "Оберіть завдання"
+                                            } />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {availableTasks.map((task) => (
-                                                <SelectItem key={task.id} value={task.id}>
-                                                    <div className="flex items-center">
-                                                        <List className="h-4 w-4 mr-2" />
-                                                        {task.title}
-                                                    </div>
-                                                </SelectItem>
-                                            ))}
+                                            {availableParentTasks.length === 0 ? (
+                                                <div className="text-sm text-muted-foreground py-2 text-center">
+                                                    Усі завдання завершені або відсутні
+                                                </div>
+                                            ) : (
+                                                availableParentTasks.map((task) => (
+                                                    <SelectItem key={task.id} value={task.id}>
+                                                        <div className="flex items-center">
+                                                            <List className="h-4 w-4 mr-2" />
+                                                            {task.title}
+                                                        </div>
+                                                    </SelectItem>
+                                                ))
+                                            )}
                                         </SelectContent>
                                     </Select>
-                                    {!selectedTask && (
-                                        <p className="text-sm text-red-500 mt-1">Це поле обов'язкове для підзавдань</p>
-                                    )}
                                 </div>
                             )}
 
@@ -687,8 +915,8 @@ export default function TaskCreator() {
                                             onChange={(e) => handleTaskDataChange('title', e.target.value)}
                                             placeholder="Назва завдання"
                                             className="text-xl"
-                                            required
                                         />
+                                        
                                     </div>
 
                                     <div>
@@ -697,12 +925,16 @@ export default function TaskCreator() {
                                             onChange={(e) => handleTaskDataChange('description', e.target.value)}
                                             placeholder="Опис завдання"
                                             className="min-h-[100px]"
+                                            maxLength={1000}
                                         />
+                                        <div className="text-xs text-muted-foreground mt-1 text-right">
+                                            {taskData.description.length}/1000 символів
+                                        </div>
                                     </div>
 
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="block text-sm font-medium mb-1">Початкова дата</label>
+                                            <label className="block text-sm font-medium mb-1">Початкова дата *</label>
                                             <div className="flex gap-2">
                                                 <div className="flex-1 flex gap-2">
                                                     <Popover>
@@ -785,7 +1017,7 @@ export default function TaskCreator() {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium mb-1">Кінцева дата</label>
+                                            <label className="block text-sm font-medium mb-1">Кінцева дата *</label>
                                             <div className="flex gap-2">
                                                 <div className="flex-1 flex gap-2">
                                                     <Popover>
@@ -869,8 +1101,6 @@ export default function TaskCreator() {
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
-                                        
-
                                         <div>
                                             <label className="block text-sm font-medium mb-1">Пріоритет</label>
                                             <Select
@@ -901,7 +1131,7 @@ export default function TaskCreator() {
                                                 value={taskData.risk}
                                                 onValueChange={(value) => handleTaskDataChange('risk', value)}
                                             >
-                                                <SelectTrigger >
+                                                <SelectTrigger>
                                                     <SelectValue placeholder="Оберіть ризик" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -979,25 +1209,31 @@ export default function TaskCreator() {
                                                 </div>
 
                                                 <div className="space-y-4">
-                                                    <Input
-                                                        value={subtask.title}
-                                                        onChange={(e) => updateSubtask(index, 'title', e.target.value)}
-                                                        placeholder="Назва підзадачі"
-                                                        required
-                                                    />
+                                                    <div>
+                                                        <Input
+                                                            value={subtask.title}
+                                                            onChange={(e) => updateSubtask(index, 'title', e.target.value)}
+                                                            placeholder="Назва підзадачі"
+                                                        />
+                                                        
+                                                    </div>
 
-                                                    <Textarea
-                                                        value={subtask.description}
-                                                        onChange={(e) => updateSubtask(index, 'description', e.target.value)}
-                                                        placeholder="Опис підзадачі"
-                                                        className="min-h-[80px]"
-                                                    />
-
-                                                    
+                                                    <div>
+                                                        <Textarea
+                                                            value={subtask.description}
+                                                            onChange={(e) => updateSubtask(index, 'description', e.target.value)}
+                                                            placeholder="Опис підзадачі"
+                                                            className="min-h-[80px]"
+                                                            maxLength={1000}
+                                                        />
+                                                        <div className="text-xs text-muted-foreground mt-1 text-right">
+                                                            {subtask.description.length}/1000 символів
+                                                        </div>
+                                                    </div>
 
                                                     <div className="space-y-4">
                                                         <div>
-                                                            <label className="block text-sm font-medium mb-1">Початкова дата</label>
+                                                            <label className="block text-sm font-medium mb-1">Початкова дата *</label>
                                                             <div className="flex gap-2">
                                                                 <div className="flex-1 flex gap-2">
                                                                     <Popover>
@@ -1080,7 +1316,7 @@ export default function TaskCreator() {
                                                         </div>
 
                                                         <div>
-                                                            <label className="block text-sm font-medium mb-1">Кінцева дата</label>
+                                                            <label className="block text-sm font-medium mb-1">Кінцева дата *</label>
                                                             <div className="flex gap-2">
                                                                 <div className="flex-1 flex gap-2">
                                                                     <Popover>

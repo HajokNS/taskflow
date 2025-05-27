@@ -1,6 +1,6 @@
 import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
-import { Flag, Calendar as CalendarIcon, LayoutDashboard, X, Tag, AlertCircle, Clock, CheckCircle, Circle, Trash2, Check, Plus, Minus } from 'lucide-react';
+import { Flag, Calendar as CalendarIcon, LayoutDashboard, X, Tag, AlertCircle, Clock, Trash2, Check, Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { Toaster, toast } from 'sonner';
+
+const MAX_TAG_LENGTH = 20;
 
 interface BreadcrumbItem {
   title: string;
@@ -34,6 +37,8 @@ interface Task {
     id: string;
     title: string;
     color: string;
+    start_date?: string;
+    end_date?: string;
   };
   tags?: Tag[];
   subtasks?: Task[];
@@ -70,50 +75,7 @@ const riskOptions = [
 const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
 const minutes = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
 
-const getPriorityColor = (priority: string) => {
-  switch (priority) {
-    case 'high': return 'text-red-400';
-    case 'medium': return 'text-yellow-400';
-    case 'low': return 'text-green-400';
-    default: return 'text-gray-400';
-  }
-};
 
-const getPriorityText = (priority: string) => {
-  switch (priority) {
-    case 'high': return 'Високий';
-    case 'medium': return 'Середній';
-    case 'low': return 'Низький';
-    default: return 'Без пріоритету';
-  }
-};
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'completed': return 'bg-green-500/20 text-green-400';
-    case 'active': return 'bg-blue-500/20 text-blue-400';
-    case 'archived': return 'bg-gray-500/20 text-gray-400';
-    default: return 'bg-gray-500/20 text-gray-400';
-  }
-};
-
-const getRiskColor = (risk: string) => {
-  switch (risk) {
-    case 'high': return 'text-red-400';
-    case 'medium': return 'text-yellow-400';
-    case 'low': return 'text-green-400';
-    default: return 'text-gray-400';
-  }
-};
-
-const getRiskText = (risk: string) => {
-  switch (risk) {
-    case 'high': return 'Високий';
-    case 'medium': return 'Середній';
-    case 'low': return 'Низький';
-    default: return 'Без ризику';
-  }
-};
 
 const TagBadge = ({ tag, onRemove }: { tag: Tag, onRemove?: () => void }) => (
   <Badge className="flex items-center pr-1" style={{ backgroundColor: tag.color }}>
@@ -141,6 +103,35 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
     },
   ];
 
+  const validateTaskForm = (): boolean => {
+    if (!currentTask.title.trim()) {
+      toast.error('Назва завдання обов\'язкова');
+      return false;
+    }
+
+    if (currentTask.title.length < 5) {
+      toast.error('Назва завдання повинна містити мінімум 5 символів');
+      return false;
+    }
+
+    if (currentTask.title.length > 100) {
+      toast.error('Назва завдання не може перевищувати 100 символів');
+      return false;
+    }
+
+    if (currentTask.description && currentTask.description.length > 1000) {
+      toast.error('Опис завдання не може перевищувати 1000 символів');
+      return false;
+    }
+
+    if (currentTask.start_date && currentTask.end_date && new Date(currentTask.end_date) < new Date(currentTask.start_date)) {
+      toast.error('Кінцева дата не може бути раніше початкової');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleTaskUpdate = (field: string, value: any) => {
     setCurrentTask(prev => ({
       ...prev,
@@ -149,8 +140,34 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
     } as Task));
   };
 
+  const getBoardDateRange = () => {
+    const boardDeadline = currentTask.board.end_date ? new Date(currentTask.board.end_date) : null;
+    const boardStartDate = currentTask.board.start_date ? new Date(currentTask.board.start_date) : null;
+
+    if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
+    if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
+
+    return { boardDeadline, boardStartDate };
+  };
+
   const handleStartDateChange = (date: Date | undefined) => {
-    if (!date) return;
+    if (!date) {
+      toast.error('Будь ласка, оберіть коректну дату');
+      return;
+    }
+
+    const { boardDeadline, boardStartDate } = getBoardDateRange();
+
+    if (boardStartDate && date < boardStartDate) {
+      toast.error(`Дата не може бути раніше початку дошки (${format(boardStartDate, 'dd.MM.yyyy')})`);
+      return;
+    }
+    
+    if (boardDeadline && date > boardDeadline) {
+      toast.error(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline, 'dd.MM.yyyy')})`);
+      return;
+    }
+
     const newDate = new Date(date);
     if (currentTask.start_date) {
       const prevDate = new Date(currentTask.start_date);
@@ -161,7 +178,28 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
   };
 
   const handleEndDateChange = (date: Date | undefined) => {
-    if (!date) return;
+    if (!date) {
+      toast.error('Будь ласка, оберіть коректну дату');
+      return;
+    }
+
+    const { boardDeadline, boardStartDate } = getBoardDateRange();
+
+    if (boardStartDate && date < boardStartDate) {
+      toast.error(`Дата не може бути раніше початку дошки (${format(boardStartDate, 'dd.MM.yyyy')})`);
+      return;
+    }
+    
+    if (boardDeadline && date > boardDeadline) {
+      toast.error(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline, 'dd.MM.yyyy')})`);
+      return;
+    }
+
+    if (currentTask.start_date && date < new Date(currentTask.start_date)) {
+      toast.error('Кінцева дата не може бути раніше початкової');
+      return;
+    }
+
     const newDate = new Date(date);
     if (currentTask.end_date) {
       const prevDate = new Date(currentTask.end_date);
@@ -180,51 +218,143 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
   };
 
   const handleCreateTag = async () => {
-    if (!newTagName.trim()) return;
-    setIsCreatingTag(true);
+            if (!newTagName.trim()) {
+                toast.error('Назва тегу не може бути порожньою');
+                return;
+            }
     
-    try {
-      await router.post('/tags', {
-        name: newTagName,
-        color: newTagColor
-      });
-      
-      setNewTagName('');
-      setTagSearch('');
-      router.reload({ only: ['availableTags'] });
-    } finally {
-      setIsCreatingTag(false);
-    }
-  };
+            if (newTagName.length > MAX_TAG_LENGTH) {
+                toast.error(`Назва тегу не може перевищувати ${MAX_TAG_LENGTH} символів`);
+                return;
+            }
+  
+            // Перевірка на існуючий тег
+              const tagExists = availableTags.some(
+                tag => tag.name.toLowerCase() === newTagName.trim().toLowerCase()
+              );
+  
+              if (tagExists) {
+                toast.error('Тег з такою назвою вже існує');
+                return;
+              }
+    
+            setIsCreatingTag(true);
+    
+            try {
+                await router.post(route('tags.store'), {
+                    name: newTagName,
+                    color: newTagColor
+                }, {
+                    onSuccess: () => {
+                        setNewTagName('');
+                        setTagSearch('');
+                        toast.success('Тег успішно створено');
+                        router.reload({ only: ['tags'] });
+                    },
+                    onError: (errors) => {
+                        if (errors.name) {
+                            toast.error(errors.name);
+                        } else {
+                            toast.error('Помилка при створенні тегу');
+                        }
+                    }
+                });
+            } catch (error) {
+                toast.error('Сталася помилка при створенні тегу');
+            } finally {
+                setIsCreatingTag(false);
+            }
+        };
 
   const updateTask = async () => {
+    if (!validateTaskForm()) {
+      return;
+    }
+
+    const { boardDeadline, boardStartDate } = getBoardDateRange();
+
+    if (currentTask.start_date && boardStartDate && new Date(currentTask.start_date) < boardStartDate) {
+      toast.error('Дата початку не може бути раніше початку дошки');
+      return;
+    }
+    
+    if (currentTask.end_date && boardDeadline && new Date(currentTask.end_date) > boardDeadline) {
+      toast.error('Дата завершення не може бути пізніше дедлайну дошки');
+      return;
+    }
+
     try {
-      await router.put(`/tasks/${currentTask.id}`, {
+      const promise = router.put(`/tasks/${currentTask.id}`, {
         ...currentTask,
         tags: selectedTags
-      }, {
-        onSuccess: () => {
+      });
+
+      toast.promise(promise, {
+        loading: 'Оновлення завдання...',
+        success: () => {
           router.get('/tasks', {}, { preserveState: true });
+          return 'Завдання успішно оновлено';
+        },
+        error: (errors) => {
+          if (errors.title) {
+            return errors.title;
+          } else if (errors.start_date) {
+            return errors.start_date;
+          } else if (errors.end_date) {
+            return errors.end_date;
+          } else if (errors.priority) {
+            return errors.priority;
+          } else if (errors.risk) {
+            return errors.risk;
+          }
+          return 'Помилка при оновленні завдання';
         }
       });
+
+      await promise;
     } catch (error) {
       console.error('Помилка при оновленні завдання:', error);
     }
   };
 
   const deleteTask = async () => {
-    try {
-      await router.delete(`/tasks/${currentTask.id}`);
-      router.visit(`/tasks`);
-    } catch (error) {
-      console.error('Помилка при видаленні завдання:', error);
-    }
+    toast('Ви впевнені, що хочете видалити це завдання?', {
+      action: {
+        label: 'Видалити',
+        onClick: async () => {
+          try {
+            const promise = router.delete(`/tasks/${currentTask.id}`);
+
+            toast.promise(promise, {
+              loading: 'Видалення завдання...',
+              success: () => {
+                router.visit(`/tasks`);
+                return 'Завдання успішно видалено';
+              },
+              error: () => {
+                return 'Не вдалося видалити завдання';
+              }
+            });
+
+            await promise;
+          } catch (error) {
+            console.error('Помилка при видаленні завдання:', error);
+          }
+        }
+      },
+      cancel: {
+        label: 'Скасувати',
+        onClick: () => {}
+      },
+      duration: 10000
+    });
   };
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Редагування завдання" />
-      
+      <Toaster position="top-center" richColors expand={true} />
+
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <h1 className="text-3xl font-bold text-white">Редагування завдання</h1>
@@ -277,6 +407,12 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
                         selected={currentTask.start_date ? new Date(currentTask.start_date) : undefined}
                         onSelect={handleStartDateChange}
                         initialFocus
+                        disabled={(date) => {
+                          const { boardDeadline, boardStartDate } = getBoardDateRange();
+                          if (boardStartDate && date < boardStartDate) return true;
+                          if (boardDeadline && date > boardDeadline) return true;
+                          return false;
+                        }}
                       />
                     </PopoverContent>
                   </Popover>
@@ -334,7 +470,9 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => handleTaskUpdate('start_date', null)}
+                  onClick={() => {
+                    handleTaskUpdate('start_date', null);
+                  }}
                   disabled={!currentTask.start_date}
                   className="px-3"
                 >
@@ -363,6 +501,13 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
                         selected={currentTask.end_date ? new Date(currentTask.end_date) : undefined}
                         onSelect={handleEndDateChange}
                         initialFocus
+                        disabled={(date) => {
+                          const { boardDeadline, boardStartDate } = getBoardDateRange();
+                          if (boardStartDate && date < boardStartDate) return true;
+                          if (boardDeadline && date > boardDeadline) return true;
+                          if (currentTask.start_date && date < new Date(currentTask.start_date)) return true;
+                          return false;
+                        }}
                       />
                     </PopoverContent>
                   </Popover>
@@ -420,7 +565,9 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => handleTaskUpdate('end_date', null)}
+                  onClick={() => {
+                    handleTaskUpdate('end_date', null);
+                  }}
                   disabled={!currentTask.end_date}
                   className="px-3"
                 >
@@ -431,13 +578,13 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            
-
             <div>
               <label className="block text-sm font-medium mb-1">Пріоритет</label>
               <Select
                 value={currentTask.priority}
-                onValueChange={(value) => handleTaskUpdate('priority', value)}
+                onValueChange={(value) => {
+                  handleTaskUpdate('priority', value);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Оберіть пріоритет" />
@@ -462,7 +609,9 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
               <label className="block text-sm font-medium mb-1">Ризик</label>
               <Select
                 value={currentTask.risk || 'low'}
-                onValueChange={(value) => handleTaskUpdate('risk', value)}
+                onValueChange={(value) => {
+                  handleTaskUpdate('risk', value);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Оберіть ризик" />
@@ -504,13 +653,17 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
                     className="mb-2"
                   />
                   
-                  <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2 p-2 rounded-lg">
                     <Input
                       placeholder="Новий тег"
-                      value={newTagName}
-                      onChange={(e) => setNewTagName(e.target.value)}
-                      className="flex-1"
-                    />
+                            value={newTagName}
+                            onChange={(e) => setNewTagName(e.target.value)}
+                            className="flex-1"
+                            maxLength={MAX_TAG_LENGTH}
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              {newTagName.length}/{MAX_TAG_LENGTH}
+                            </span>
                     <Popover>
                       <PopoverTrigger asChild>
                         <button
@@ -532,7 +685,9 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
                                     : 'border border-transparent'
                                 } ${color === '#FFFFFF' ? 'border border-gray-300' : ''}`}
                                 style={{ backgroundColor: color }}
-                                onClick={() => setNewTagColor(color)}
+                                onClick={() => {
+                                  setNewTagColor(color);
+                                }}
                               />
                             ))}
                           </div>
@@ -547,7 +702,9 @@ export default function EditTaskPage({ task, availableTags }: { task: Task, avai
                                     : 'border border-transparent'
                                 }`}
                                 style={{ backgroundColor: color }}
-                                onClick={() => setNewTagColor(color)}
+                                onClick={() => {
+                                  setNewTagColor(color);
+                                }}
                               />
                             ))}
                           </div>
