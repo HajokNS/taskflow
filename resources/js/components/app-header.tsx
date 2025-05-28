@@ -12,21 +12,22 @@ import { cn } from '@/lib/utils';
 
 import { type BreadcrumbItem, type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Menu, Search, ContactRoundIcon, Calendar, UserIcon, CircuitBoardIcon } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, Menu, Search, ContactRoundIcon, Calendar, UserIcon, CircuitBoardIcon, GanttChart, BookCheck, BookCheckIcon, LayoutDashboardIcon } from 'lucide-react';
 import AppLogo from './app-logo';
 import AppLogoIcon from './app-logo-icon';
+import { Task } from '@mui/icons-material';
 
 const mainNavItems: NavItem[] = [
     
     {
         title: 'Завдання',
         href: '/tasks',
-        icon: ContactRoundIcon,
+        icon: BookCheckIcon,
     },
     {
         title: 'Дошки',
         href: '/boards',
-        icon: CircuitBoardIcon,
+        icon: LayoutDashboardIcon,
     },
     {
         title: 'Календар',
@@ -36,7 +37,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Діаграма Ганта',
         href: '/gantt',
-        icon: UserIcon,
+        icon: GanttChart,
     },
     {
         title: 'Адмін панель',
