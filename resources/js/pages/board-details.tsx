@@ -11,11 +11,101 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Toaster, toast } from 'sonner';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
+import DOMPurify from 'dompurify';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
+
+const quillStyles = `
+  .ql-container {
+    border: 1px solid rgba(100, 100, 100, 0.3);
+    border-radius: 6px;
+    color: #d4d4d4;
+    font-size: 1rem;
+    backdrop-filter: blur(8px);
+    outline: none;
+    height: 150px; /* 🔥 Фіксована висота */
+    max-height: 200px;
+  }
+
+  .ql-editor {
+    min-height: 150px;
+    padding: 14px;
+    color: #d4d4d4;
+    outline: none;
+    line-height: 1.6;
+  }
+
+  .ql-editor.ql-blank::before {
+    content: "Введіть вміст вашого поста...";
+    color: rgba(212, 212, 212, 0.4);
+    font-style: italic;
+    pointer-events: none;
+    position: absolute;
+  }
+
+  .ql-container:focus, .ql-editor:focus {
+    border: 1px solid #5e5e5e;
+    box-shadow: 0 0 8px rgba(94, 94, 94, 0.5);
+    outline: none;
+  }
+
+  .ql-toolbar {
+    background: rgba(15, 15, 20, 0.95);
+    border: 1px solid rgba(100, 100, 100, 0.3);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    backdrop-filter: blur(8px);
+  }
+
+  .ql-toolbar .ql-formats {
+    margin-right: 8px;
+  }
+
+  .ql-toolbar .ql-stroke {
+    stroke: #d4d4d4;
+  }
+
+  .ql-toolbar .ql-fill {
+    fill: #d4d4d4;
+  }
+
+  .ql-toolbar .ql-picker {
+    color: #d4d4d4;
+    font-size: 0.85rem;
+  }
+
+  .ql-toolbar .ql-active .ql-stroke,
+  .ql-toolbar .ql-active .ql-fill {
+    stroke: #bfbfbf;
+    fill: #bfbfbf;
+  }
+
+  .ql-toolbar .ql-picker-label:hover,
+  .ql-toolbar .ql-picker-item:hover {
+    color: #bfbfbf;
+  }
+
+  .ql-toolbar button:hover .ql-stroke,
+  .ql-toolbar button:hover .ql-fill {
+    stroke: #bfbfbf;
+    fill: #bfbfbf;
+  }
+
+  .ql-toolbar .ql-picker-options {
+    background-color: rgba(20, 20, 25, 0.95);
+    color: #d4d4d4;
+    border: 1px solid rgba(100, 100, 100, 0.3);
+  }
+
+  .ql-editor a {
+    color: #a0a0a0;
+    text-decoration: underline;
+  }
+`;
 
 interface Board {
   id: string;
@@ -146,9 +236,10 @@ const TaskCard = ({ task }: { task: Board['tasks'][0] }) => {
       </div>
 
       {task.description && (
-        <p className="mt-1 text-xs text-muted-foreground line-clamp-2 break-words">
-          {task.description}
-        </p>
+        <div
+          className="mt-1 text-xs text-muted-foreground line-clamp-2 break-words"
+          dangerouslySetInnerHTML={{ __html: task.description }}
+        />
       )}
 
       <div className="mt-2 space-y-1">
@@ -173,11 +264,11 @@ const TaskCard = ({ task }: { task: Board['tasks'][0] }) => {
       <div className="mt-2 flex flex-wrap items-center gap-1">
         <PriorityBadge priority={task.priority} />
         <RiskBadge risk={task.risk} />
-        
+
         {task.tags?.map((tag) => (
-          <Badge 
-            key={tag.id} 
-            className="text-xs py-0.5 px-1.5" 
+          <Badge
+            key={tag.id}
+            className="text-xs py-0.5 px-1.5"
             style={{ backgroundColor: tag.color }}
           >
             #{tag.name}
@@ -230,19 +321,19 @@ export default function BoardDetails({ board }: Props) {
   };
 
   const totalTasks = boardData.tasks?.length || 0;
-  const completionPercentage = totalTasks > 0 
+  const completionPercentage = totalTasks > 0
     ? Math.round((tasksByStatus.completed.length / totalTasks) * 100) : 0;
 
   const calculateTimeProgress = () => {
     if (!boardData.start_date || !boardData.end_date) return 0;
-    
+
     const start = new Date(boardData.start_date).getTime();
     const end = new Date(boardData.end_date).getTime();
     const now = new Date().getTime();
-    
+
     if (now < start) return 0;
     if (now > end) return 100;
-    
+
     return Math.round(((now - start) / (end - start)) * 100);
   };
 
@@ -283,7 +374,11 @@ export default function BoardDetails({ board }: Props) {
       toast.error('Назва не може перевищувати 50 символів');
     }
 
-    if (boardData.description && boardData.description.length > 1000) {
+    // Check description length (HTML stripped)
+    const descriptionLength = boardData.description
+      ? boardData.description.replace(/<[^>]*>/g, '').length
+      : 0;
+    if (descriptionLength > 1000) {
       newErrors.description = 'Опис не може перевищувати 1000 символів';
       toast.error('Опис не може перевищувати 1000 символів');
     }
@@ -339,61 +434,61 @@ export default function BoardDetails({ board }: Props) {
   };
 
   const deleteBoard = async () => {
-  toast('Ви впевнені, що хочете видалити цю дошку?', {
-    action: {
-      label: 'Видалити',
-      onClick: async () => {
-        setIsDeleting(true);
-        try {
-          const promise = router.delete(route('boards.destroy', boardData.id));
+    toast('Ви впевнені, що хочете видалити цю дошку?', {
+      action: {
+        label: 'Видалити',
+        onClick: async () => {
+          setIsDeleting(true);
+          try {
+            const promise = router.delete(route('boards.destroy', boardData.id));
 
-          toast.promise(promise, {
-            loading: 'Видалення дошки...',
-            success: () => {
-              router.get(route('boards.index'));
-              return 'Дошку успішно видалено';
-            },
-            error: () => {
-              setIsDeleting(false);
-              return 'Не вдалося видалити дошку';
-            }
-          });
+            toast.promise(promise, {
+              loading: 'Видалення дошки...',
+              success: () => {
+                router.get(route('boards.index'));
+                return 'Дошку успішно видалено';
+              },
+              error: () => {
+                setIsDeleting(false);
+                return 'Не вдалося видалити дошку';
+              }
+            });
 
-          await promise;
-        } catch (error) {
-          console.error('Помилка при видаленні дошки:', error);
-          toast.error('Сталася помилка при видаленні дошки');
+            await promise;
+          } catch (error) {
+            console.error('Помилка при видаленні дошки:', error);
+            toast.error('Сталася помилка при видаленні дошки');
+            setIsDeleting(false);
+          }
+        }
+      },
+      cancel: {
+        label: 'Скасувати',
+        onClick: () => {
           setIsDeleting(false);
         }
-      }
-    },
-    cancel: {
-      label: 'Скасувати',
-      onClick: () => {
-        setIsDeleting(false);
-      }
-    },
-    duration: 10000
-  });
-};
+      },
+      duration: 10000
+    });
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      
+
       if (file.size > 10 * 1024 * 1024) {
         toast.error('Файл не може бути більше 10MB');
         return;
       }
-      
-      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 
-                         'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                         'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf',
+        'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
       if (!validTypes.includes(file.type)) {
         toast.error('Непідтримуваний тип файлу. Дозволені: JPG, PNG, GIF, PDF, DOC, DOCX, XLS, XLSX');
         return;
       }
-      
+
       setSelectedFile(file);
       handleFileUpload(file);
     }
@@ -422,25 +517,30 @@ export default function BoardDetails({ board }: Props) {
     }
   };
 
+  const sanitizedDescription = DOMPurify.sanitize(boardData.description || '', {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'a', 'ul', 'ol', 'li', 'blockquote'],
+    ALLOWED_ATTR: ['href', 'target', 'rel']
+  });
+
   return (
     <AppLayout>
       <Head title={boardData.title} />
       <Toaster position="top-center" richColors />
-      
+
       <div className="container mx-auto px-4 py-8 space-y-6">
         <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center space-x-4">
-            <Link 
-              href={route('boards.index')} 
+            <Link
+              href={route('boards.index')}
               className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               До всіх дошок
             </Link>
-            
+
             <div className="flex items-center space-x-2">
-              <span 
-                className="h-3 w-3 rounded-full" 
+              <span
+                className="h-3 w-3 rounded-full"
                 style={{ backgroundColor: boardData.color }}
               />
               <span className="text-sm text-muted-foreground">
@@ -448,11 +548,11 @@ export default function BoardDetails({ board }: Props) {
               </span>
             </div>
           </div>
-          
+
           <div className="flex space-x-2">
-            <Button 
-              variant="default" 
-              size="sm" 
+            <Button
+              variant="default"
+              size="sm"
               asChild
             >
               <Link href={route('tasks.create', { board_id: board.id })}>
@@ -464,8 +564,8 @@ export default function BoardDetails({ board }: Props) {
               <Edit className="h-4 w-4 mr-2" />
               Редагувати
             </Button>
-            <Button 
-              variant="destructive"  // Червоний фон, білий текст
+            <Button
+              variant="destructive"
               size="sm"
               onClick={deleteBoard}
               disabled={isDeleting}
@@ -481,14 +581,51 @@ export default function BoardDetails({ board }: Props) {
             <h1 className="text-3xl font-bold tracking-tight">
               {boardData.title}
             </h1>
-            <Star 
+            <Star
               className={`h-5 w-5 ${boardData.is_favorite ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`}
             />
           </div>
           {boardData.description && (
-            <p className="text-muted-foreground max-w-3xl">
-              {boardData.description}
-            </p>
+            <div
+              className="text-muted-foreground max-w-3xl"
+              style={{ overflow: 'hidden' }}
+            >
+              <style>{`
+    .description-prose p {
+      margin: 0 0 0.75rem;
+      line-height: 1.6;
+    }
+    .description-prose ul {
+      list-style-type: disc;
+      padding-left: 1.25rem;
+      margin: 0.75rem 0;
+    }
+    .description-prose ol {
+      list-style-type: decimal;
+      padding-left: 1.25rem;
+      margin: 0.75rem 0;
+    }
+    .description-prose li {
+      margin-bottom: 0.35rem;
+    }
+    .description-prose a {
+      color: #3b82f6;
+      text-decoration: underline;
+    }
+    .description-prose blockquote {
+      border-left: 4px solid #9ca3af;
+      padding-left: 0.75rem;
+      color: #6b7280;
+      margin: 0.75rem 0;
+      font-style: italic;
+    }
+  `}</style>
+              <div
+                className="description-prose"
+                dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
+              />
+            </div>
+
           )}
         </div>
 
@@ -561,16 +698,16 @@ export default function BoardDetails({ board }: Props) {
             </CardHeader>
             <CardContent>
               <div className="h-[120px] flex items-center justify-center">
-                <Pie 
-                  data={pieChartData} 
-                  options={{ 
+                <Pie
+                  data={pieChartData}
+                  options={{
                     maintainAspectRatio: false,
                     plugins: {
                       legend: {
                         position: 'right',
                       }
                     }
-                  }} 
+                  }}
                 />
               </div>
             </CardContent>
@@ -632,16 +769,16 @@ export default function BoardDetails({ board }: Props) {
             )}
 
             <div className="mt-4">
-              <input 
-                type="file" 
-                id="file-upload" 
+              <input
+                type="file"
+                id="file-upload"
                 className="hidden"
                 onChange={handleFileChange}
                 accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx"
               />
-              <Button 
-                variant="default" 
-                size="sm" 
+              <Button
+                variant="default"
+                size="sm"
                 onClick={() => document.getElementById('file-upload')?.click()}
               >
                 <Plus className="h-4 w-4 mr-2" /> Додати файл
@@ -651,25 +788,25 @@ export default function BoardDetails({ board }: Props) {
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <TaskColumn 
-            title="Не розпочаті" 
-            tasks={tasksByStatus.not_started} 
-            color="bg-gray-400" 
+          <TaskColumn
+            title="Не розпочаті"
+            tasks={tasksByStatus.not_started}
+            color="bg-gray-400"
           />
-          <TaskColumn 
-            title="Активні" 
-            tasks={tasksByStatus.active} 
-            color="bg-blue-400" 
+          <TaskColumn
+            title="Активні"
+            tasks={tasksByStatus.active}
+            color="bg-blue-400"
           />
-          <TaskColumn 
-            title="Завершені" 
-            tasks={tasksByStatus.completed} 
-            color="bg-green-400" 
+          <TaskColumn
+            title="Завершені"
+            tasks={tasksByStatus.completed}
+            color="bg-green-400"
           />
-          <TaskColumn 
-            title="Прострочені" 
-            tasks={tasksByStatus.overdue} 
-            color="bg-red-400" 
+          <TaskColumn
+            title="Прострочені"
+            tasks={tasksByStatus.overdue}
+            color="bg-red-400"
           />
         </div>
       </div>
@@ -679,7 +816,7 @@ export default function BoardDetails({ board }: Props) {
           <DialogHeader>
             <DialogTitle className="text-xl">Редагувати дошку</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="flex items-center gap-4">
               <div className="relative flex-grow">
@@ -689,14 +826,19 @@ export default function BoardDetails({ board }: Props) {
                   value={boardData.title}
                   onChange={(e) => {
                     handleBoardUpdate('title', e.target.value);
-                    if (errors.title) setErrors({...errors, title: ''});
+                    if (errors.title) setErrors({ ...errors, title: '' });
                   }}
                   className="text-xl"
                   maxLength={50}
                 />
-               
+                {errors.title && (
+                  <div className="flex items-center text-sm text-red-500 mt-1">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    {errors.title}
+                  </div>
+                )}
               </div>
-              <button 
+              <button
                 type="button"
                 onClick={() => handleBoardUpdate('is_favorite', !boardData.is_favorite)}
                 className={`transition-colors ${boardData.is_favorite ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`}
@@ -706,15 +848,23 @@ export default function BoardDetails({ board }: Props) {
             </div>
 
             <div>
-              <Textarea
-                placeholder="Опис дошки"
+              <style>{quillStyles}</style>
+              <ReactQuill
                 value={boardData.description || ''}
-                onChange={(e) => {
-                  handleBoardUpdate('description', e.target.value);
-                  if (errors.description) setErrors({...errors, description: ''});
+                onChange={(value) => {
+                  handleBoardUpdate('description', value);
+                  if (errors.description) setErrors({ ...errors, description: '' });
                 }}
-                className="min-h-[100px]"
-                maxLength={1000}
+                modules={{
+                  toolbar: [
+                    ['bold', 'italic', 'underline'],
+                    ['link'],
+                    [{ list: 'ordered' }, { list: 'bullet' }],
+                  ],
+                }}
+                formats={['bold', 'italic', 'underline', 'link', 'list', 'bullet']}
+                theme="snow"
+                style={{ marginBottom: '24px' }}
               />
               <div className="flex justify-between mt-1">
                 {errors.description && (
@@ -724,7 +874,7 @@ export default function BoardDetails({ board }: Props) {
                   </div>
                 )}
                 <div className="text-xs text-muted-foreground">
-                  {boardData.description?.length || 0}/1000 символів
+                  {boardData.description?.replace(/<[^>]*>/g, '').length || 0}/1000 символів
                 </div>
               </div>
             </div>
@@ -737,11 +887,16 @@ export default function BoardDetails({ board }: Props) {
                   value={boardData.estimated_hours || 0}
                   onChange={(e) => {
                     handleBoardUpdate('estimated_hours', Number(e.target.value));
-                    if (errors.estimated_hours) setErrors({...errors, estimated_hours: ''});
+                    if (errors.estimated_hours) setErrors({ ...errors, estimated_hours: '' });
                   }}
                   min="0"
                 />
-                
+                {errors.estimated_hours && (
+                  <div className="flex items-center text-sm text-red-500 mt-1">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    {errors.estimated_hours}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -751,11 +906,16 @@ export default function BoardDetails({ board }: Props) {
                   value={boardData.estimated_budget || 0}
                   onChange={(e) => {
                     handleBoardUpdate('estimated_budget', Number(e.target.value));
-                    if (errors.estimated_budget) setErrors({...errors, estimated_budget: ''});
+                    if (errors.estimated_budget) setErrors({ ...errors, estimated_budget: '' });
                   }}
                   min="0"
                 />
-                
+                {errors.estimated_budget && (
+                  <div className="flex items-center text-sm text-red-500 mt-1">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    {errors.estimated_budget}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -767,11 +927,10 @@ export default function BoardDetails({ board }: Props) {
                     <button
                       key={color}
                       type="button"
-                      className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${
-                        boardData.color === color
+                      className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${boardData.color === color
                           ? 'border-2 border-gray-900 shadow-md'
                           : 'border border-transparent'
-                      } ${color === '#FFFFFF' ? 'border border-gray-300' : ''}`}
+                        } ${color === '#FFFFFF' ? 'border border-gray-300' : ''}`}
                       style={{ backgroundColor: color }}
                       onClick={() => handleBoardUpdate('color', color)}
                     />
@@ -781,15 +940,15 @@ export default function BoardDetails({ board }: Props) {
             </div>
 
             <div className="flex justify-end pt-4 gap-2">
-              <Button 
-                type="button" 
+              <Button
+                type="button"
                 variant="outline"
                 onClick={() => setEditModalOpen(false)}
               >
                 Скасувати
               </Button>
-              <Button 
-                type="button" 
+              <Button
+                type="button"
                 onClick={saveBoard}
               >
                 Зберегти зміни

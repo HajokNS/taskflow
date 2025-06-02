@@ -9,10 +9,11 @@ import { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Toaster } from 'sonner';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 
 const COLOR_PALETTE = [
     '#FFFFFF', '#000000', '#FF6900', '#FCB900', '#7BDCB5',
@@ -20,6 +21,94 @@ const COLOR_PALETTE = [
 ];
 
 const MAX_TAG_LENGTH = 20;
+
+const quillStyles = `
+  .ql-container {
+    border: 1px solid rgba(100, 100, 100, 0.3);
+    border-radius: 6px;
+    color: #d4d4d4;
+    font-size: 1rem;
+    backdrop-filter: blur(8px);
+    outline: none;
+    height: 150px; /* 🔥 Фіксована висота */
+    max-height: 200px;
+  }
+
+  .ql-editor {
+    min-height: 150px;
+    padding: 14px;
+    color: #d4d4d4;
+    outline: none;
+    line-height: 1.6;
+  }
+
+  .ql-editor.ql-blank::before {
+    content: "Введіть вміст вашого поста...";
+    color: rgba(212, 212, 212, 0.4);
+    font-style: italic;
+    pointer-events: none;
+    position: absolute;
+  }
+
+  .ql-container:focus, .ql-editor:focus {
+    border: 1px solid #5e5e5e;
+    box-shadow: 0 0 8px rgba(94, 94, 94, 0.5);
+    outline: none;
+  }
+
+  .ql-toolbar {
+    background: rgba(15, 15, 20, 0.95);
+    border: 1px solid rgba(100, 100, 100, 0.3);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    backdrop-filter: blur(8px);
+  }
+
+  .ql-toolbar .ql-formats {
+    margin-right: 8px;
+  }
+
+  .ql-toolbar .ql-stroke {
+    stroke: #d4d4d4;
+  }
+
+  .ql-toolbar .ql-fill {
+    fill: #d4d4d4;
+  }
+
+  .ql-toolbar .ql-picker {
+    color: #d4d4d4;
+    font-size: 0.85rem;
+  }
+
+  .ql-toolbar .ql-active .ql-stroke,
+  .ql-toolbar .ql-active .ql-fill {
+    stroke: #bfbfbf;
+    fill: #bfbfbf;
+  }
+
+  .ql-toolbar .ql-picker-label:hover,
+  .ql-toolbar .ql-picker-item:hover {
+    color: #bfbfbf;
+  }
+
+  .ql-toolbar button:hover .ql-stroke,
+  .ql-toolbar button:hover .ql-fill {
+    stroke: #bfbfbf;
+    fill: #bfbfbf;
+  }
+
+  .ql-toolbar .ql-picker-options {
+    background-color: rgba(20, 20, 25, 0.95);
+    color: #d4d4d4;
+    border: 1px solid rgba(100, 100, 100, 0.3);
+  }
+
+  .ql-editor a {
+    color: #a0a0a0;
+    text-decoration: underline;
+  }
+`;
 
 export default function TaskCreator() {
     const { props } = usePage();
@@ -438,53 +527,53 @@ export default function TaskCreator() {
     };
 
     const handleCreateTag = async () => {
-              if (!newTagName.trim()) {
-                  toast.error('Назва тегу не може бути порожньою');
-                  return;
-              }
-      
-              if (newTagName.length > MAX_TAG_LENGTH) {
-                  toast.error(`Назва тегу не може перевищувати ${MAX_TAG_LENGTH} символів`);
-                  return;
-              }
-    
-              // Перевірка на існуючий тег
-        const tagExists = availableTags.some(
-          tag => tag.name.toLowerCase() === newTagName.trim().toLowerCase()
-        );
-    
-        if (tagExists) {
-          toast.error('Тег з такою назвою вже існує');
-          return;
+        if (!newTagName.trim()) {
+            toast.error('Назва тегу не може бути порожньою');
+            return;
         }
-      
-              setIsCreatingTag(true);
-      
-              try {
-                  await router.post(route('tags.store'), {
-                      name: newTagName,
-                      color: newTagColor
-                  }, {
-                      onSuccess: () => {
-                          setNewTagName('');
-                          setTagSearch('');
-                          toast.success('Тег успішно створено');
-                          router.reload({ only: ['tags'] });
-                      },
-                      onError: (errors) => {
-                          if (errors.name) {
-                              toast.error(errors.name);
-                          } else {
-                              toast.error('Помилка при створенні тегу');
-                          }
-                      }
-                  });
-              } catch (error) {
-                  toast.error('Сталася помилка при створенні тегу');
-              } finally {
-                  setIsCreatingTag(false);
-              }
-          };
+
+        if (newTagName.length > MAX_TAG_LENGTH) {
+            toast.error(`Назва тегу не може перевищувати ${MAX_TAG_LENGTH} символів`);
+            return;
+        }
+
+        // Перевірка на існуючий тег
+        const tagExists = availableTags.some(
+            tag => tag.name.toLowerCase() === newTagName.trim().toLowerCase()
+        );
+
+        if (tagExists) {
+            toast.error('Тег з такою назвою вже існує');
+            return;
+        }
+
+        setIsCreatingTag(true);
+
+        try {
+            await router.post(route('tags.store'), {
+                name: newTagName,
+                color: newTagColor
+            }, {
+                onSuccess: () => {
+                    setNewTagName('');
+                    setTagSearch('');
+                    toast.success('Тег успішно створено');
+                    router.reload({ only: ['tags'] });
+                },
+                onError: (errors) => {
+                    if (errors.name) {
+                        toast.error(errors.name);
+                    } else {
+                        toast.error('Помилка при створенні тегу');
+                    }
+                }
+            });
+        } catch (error) {
+            toast.error('Сталася помилка при створенні тегу');
+        } finally {
+            setIsCreatingTag(false);
+        }
+    };
 
     const validateTask = () => {
         if (!taskData.title.trim()) {
@@ -502,7 +591,8 @@ export default function TaskCreator() {
             return false;
         }
 
-        if (taskData.description && taskData.description.length > 1000) {
+        const plainTextDescription = taskData.description.replace(/<[^>]*>/g, '');
+        if (plainTextDescription.length > 1000) {
             toast.error('Опис завдання не може перевищувати 1000 символів');
             return false;
         }
@@ -549,7 +639,8 @@ export default function TaskCreator() {
                 return false;
             }
 
-            if (subtask.description && subtask.description.length > 1000) {
+            const plainTextDescription = subtask.description.replace(/<[^>]*>/g, '');
+            if (plainTextDescription.length > 1000) {
                 toast.error(`Підзадача ${index + 1}: опис не може перевищувати 1000 символів`);
                 return false;
             }
@@ -916,19 +1007,26 @@ export default function TaskCreator() {
                                             placeholder="Назва завдання"
                                             className="text-xl"
                                         />
-                                        
                                     </div>
 
                                     <div>
-                                        <Textarea
+                                        <style>{quillStyles}</style>
+                                        <ReactQuill
                                             value={taskData.description}
-                                            onChange={(e) => handleTaskDataChange('description', e.target.value)}
-                                            placeholder="Опис завдання"
-                                            className="min-h-[100px]"
-                                            maxLength={1000}
+                                            onChange={(value) => handleTaskDataChange('description', value)}
+                                            modules={{
+                                                toolbar: [
+                                                    ['bold', 'italic', 'underline'],
+                                                    ['link'],
+                                                    [{ list: 'ordered' }, { list: 'bullet' }],
+                                                ],
+                                            }}
+                                            formats={['bold', 'italic', 'underline', 'link', 'list', 'bullet']}
+                                            theme="snow"
+                                            style={{ marginBottom: '8px' }}
                                         />
                                         <div className="text-xs text-muted-foreground mt-1 text-right">
-                                            {taskData.description.length}/1000 символів
+                                            {taskData.description.replace(/<[^>]*>/g, '').length}/1000 символів
                                         </div>
                                     </div>
 
@@ -1149,26 +1247,24 @@ export default function TaskCreator() {
                                             </Select>
                                         </div>
                                     </div>
-                                </div>
-                            )}
 
-                            {mode === 'task' && (
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Теги</label>
-                                    <Popover open={tagsOpen} onOpenChange={setTagsOpen}>
-                                        <PopoverTrigger asChild>
-                                            <Button variant="outline" className="w-full justify-start">
-                                                <Tag className="h-4 w-4 mr-2" />
-                                                {selectedTags.length > 0
-                                                    ? `${selectedTags.length} обрано`
-                                                    : 'Оберіть теги'}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent ref={popoverRef} className="w-[300px] p-2">
-                                            {renderTagSelector(selectedTags, toggleTag)}
-                                        </PopoverContent>
-                                    </Popover>
-                                    {renderTagBadges(selectedTags, toggleTag)}
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Теги</label>
+                                        <Popover open={tagsOpen} onOpenChange={setTagsOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className="w-full justify-start">
+                                                    <Tag className="h-4 w-4 mr-2" />
+                                                    {selectedTags.length > 0
+                                                        ? `${selectedTags.length} обрано`
+                                                        : 'Оберіть теги'}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent ref={popoverRef} className="w-[300px] p-2">
+                                                {renderTagSelector(selectedTags, toggleTag)}
+                                            </PopoverContent>
+                                        </Popover>
+                                        {renderTagBadges(selectedTags, toggleTag)}
+                                    </div>
                                 </div>
                             )}
 
@@ -1215,19 +1311,26 @@ export default function TaskCreator() {
                                                             onChange={(e) => updateSubtask(index, 'title', e.target.value)}
                                                             placeholder="Назва підзадачі"
                                                         />
-                                                        
                                                     </div>
 
                                                     <div>
-                                                        <Textarea
+                                                        <style>{quillStyles}</style>
+                                                        <ReactQuill
                                                             value={subtask.description}
-                                                            onChange={(e) => updateSubtask(index, 'description', e.target.value)}
-                                                            placeholder="Опис підзадачі"
-                                                            className="min-h-[80px]"
-                                                            maxLength={1000}
+                                                            onChange={(value) => updateSubtask(index, 'description', value)}
+                                                            modules={{
+                                                                toolbar: [
+                                                                    ['bold', 'italic', 'underline'],
+                                                                    ['link'],
+                                                                    [{ list: 'ordered' }, { list: 'bullet' }],
+                                                                ],
+                                                            }}
+                                                            formats={['bold', 'italic', 'underline', 'link', 'list', 'bullet']}
+                                                            theme="snow"
+                                                            style={{ marginBottom: '8px' }}
                                                         />
                                                         <div className="text-xs text-muted-foreground mt-1 text-right">
-                                                            {subtask.description.length}/1000 символів
+                                                            {subtask.description.replace(/<[^>]*>/g, '').length}/1000 символів
                                                         </div>
                                                     </div>
 

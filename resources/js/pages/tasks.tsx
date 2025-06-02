@@ -8,14 +8,16 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import axios from 'axios';
 import { Toaster, toast } from 'sonner';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
+import DOMPurify from 'dompurify';
 
 const MAX_TAG_LENGTH = 20;
 
@@ -91,6 +93,95 @@ const statusOptions = [
 
 const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
 const minutes = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
+
+const quillStyles = `
+  .ql-container {
+    border: 1px solid rgba(100, 100, 100, 0.3);
+    border-radius: 6px;
+    color: #d4d4d4;
+    font-size: 1rem;
+    backdrop-filter: blur(8px);
+    outline: none;
+    height: 150px; /* 🔥 Фіксована висота */
+    max-height: 200px;
+  }
+
+  .ql-editor {
+    min-height: 150px;
+    padding: 14px;
+    color: #d4d4d4;
+    outline: none;
+    line-height: 1.6;
+  }
+
+  .ql-editor.ql-blank::before {
+    content: "Введіть вміст вашого поста...";
+    color: rgba(212, 212, 212, 0.4);
+    font-style: italic;
+    pointer-events: none;
+    position: absolute;
+  }
+
+  .ql-container:focus, .ql-editor:focus {
+    border: 1px solid #5e5e5e;
+    box-shadow: 0 0 8px rgba(94, 94, 94, 0.5);
+    outline: none;
+  }
+
+  .ql-toolbar {
+    background: rgba(15, 15, 20, 0.95);
+    border: 1px solid rgba(100, 100, 100, 0.3);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    backdrop-filter: blur(8px);
+  }
+
+  .ql-toolbar .ql-formats {
+    margin-right: 8px;
+  }
+
+  .ql-toolbar .ql-stroke {
+    stroke: #d4d4d4;
+  }
+
+  .ql-toolbar .ql-fill {
+    fill: #d4d4d4;
+  }
+
+  .ql-toolbar .ql-picker {
+    color: #d4d4d4;
+    font-size: 0.85rem;
+  }
+
+  .ql-toolbar .ql-active .ql-stroke,
+  .ql-toolbar .ql-active .ql-fill {
+    stroke: #bfbfbf;
+    fill: #bfbfbf;
+  }
+
+  .ql-toolbar .ql-picker-label:hover,
+  .ql-toolbar .ql-picker-item:hover {
+    color: #bfbfbf;
+  }
+
+  .ql-toolbar button:hover .ql-stroke,
+  .ql-toolbar button:hover .ql-fill {
+    stroke: #bfbfbf;
+    fill: #bfbfbf;
+  }
+
+  .ql-toolbar .ql-picker-options {
+    background-color: rgba(20, 20, 25, 0.95);
+    color: #d4d4d4;
+    border: 1px solid rgba(100, 100, 100, 0.3);
+  }
+
+  .ql-editor a {
+    color: #a0a0a0;
+    text-decoration: underline;
+  }
+`;
+
 
 const getPriorityColor = (priority: string) => {
   switch (priority) {
@@ -188,23 +279,28 @@ const DateRangeDisplay = ({ start, end }: { start?: string, end?: string }) => {
   );
 };
 
-const TaskItem = ({ 
-  task, 
-  onClick, 
-  onToggleExpand, 
+const TaskItem = ({
+  task,
+  onClick,
+  onToggleExpand,
   isExpanded,
   onMarkAsCompleted
 }: TaskItemProps) => {
-  const allSubtasksCompleted = task.subtasks 
+  const allSubtasksCompleted = task.subtasks
     ? task.subtasks.every(subtask => subtask.status === 'completed')
     : false;
 
-  const isEffectivelyCompleted = task.status === 'completed' || 
+  const isEffectivelyCompleted = task.status === 'completed' ||
     (task.subtasks && task.subtasks.length > 0 && allSubtasksCompleted);
+
+  const sanitizedDescription = DOMPurify.sanitize(task.description || '', {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'a', 'ul', 'ol', 'li', 'blockquote'],
+    ALLOWED_ATTR: ['href', 'target', 'rel']
+  });
 
   return (
     <div className="space-y-2">
-      <Card 
+      <Card
         className={cn(
           "border-l-4 hover:shadow-md transition-shadow bg-white/5 backdrop-blur-sm cursor-pointer",
           isEffectivelyCompleted ? "border-green-500/50" : "border-white/10"
@@ -213,7 +309,7 @@ const TaskItem = ({
       >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4">
           <div className="flex items-center gap-2 flex-wrap w-full">
-            <button 
+            <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
@@ -235,9 +331,9 @@ const TaskItem = ({
             </CardTitle>
           </div>
           {task.subtasks && task.subtasks.length > 0 && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               className="text-white hover:bg-white/10"
               onClick={(e) => {
                 e.stopPropagation();
@@ -253,43 +349,44 @@ const TaskItem = ({
             </Button>
           )}
         </CardHeader>
-        
+
         <CardContent className="px-4">
-          {task.description && (
-            <p className={cn(
-              "text-base mb-3 line-clamp-2 break-words",
-              isEffectivelyCompleted ? "text-gray-400" : "text-gray-300"
-            )}>
-              {task.description}
-            </p>
+      {task.description && (
+        <div
+          className={cn(
+            "prose prose-sm dark:prose-invert mb-3 break-words line-clamp-2",
+            isEffectivelyCompleted ? "text-gray-400" : "text-gray-300"
           )}
-          
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            {(task.start_date || task.end_date) && (
-              <DateRangeDisplay start={task.start_date} end={task.end_date} />
-            )}
-            
-            <Badge className={isEffectivelyCompleted ? getStatusColor('completed') : getStatusColor(task.status)}>
-              {isEffectivelyCompleted ? 'Завершене' : getStatusText(task.status)}
-            </Badge>
-            
-            <PriorityBadge priority={task.priority} />
-            <RiskBadge risk={task.risk} />
-            
-            {task.tags?.map((tag) => (
-              <TagBadge key={tag.id} tag={tag} />
-            ))}
-          </div>
-        </CardContent>
+          dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
+        />
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 mt-2">
+        {(task.start_date || task.end_date) && (
+          <DateRangeDisplay start={task.start_date} end={task.end_date} />
+        )}
+
+        <Badge className={isEffectivelyCompleted ? getStatusColor('completed') : getStatusColor(task.status)}>
+          {isEffectivelyCompleted ? 'Завершене' : getStatusText(task.status)}
+        </Badge>
+
+        <PriorityBadge priority={task.priority} />
+        <RiskBadge risk={task.risk} />
+
+        {task.tags?.map((tag) => (
+          <TagBadge key={tag.id} tag={tag} />
+        ))}
+      </div>
+    </CardContent>
       </Card>
     </div>
   );
 };
 
-export default function Tasks({ tasks, filters = {}, availableTags = [] }: { 
-  tasks: { data: Task[] }, 
-  filters: any, 
-  availableTags: Tag[] 
+export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
+  tasks: { data: Task[] },
+  filters: any,
+  availableTags: Tag[]
 }) {
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
   const [statusFilter, setStatusFilter] = useState(filters.status || 'all');
@@ -379,8 +476,8 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
   const sortTasks = useCallback((tasksToSort: Task[]) => {
     return [...tasksToSort].sort((a, b) => {
       if (sortField === 'title') {
-        return sortDirection === 'asc' 
-          ? a.title.localeCompare(b.title) 
+        return sortDirection === 'asc'
+          ? a.title.localeCompare(b.title)
           : b.title.localeCompare(a.title);
       }
       if (sortField === 'start_date') {
@@ -404,19 +501,19 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       .map((group) => ({
         ...group,
         tasks: sortTasks(group.tasks.filter((task) => {
-          const allSubtasksCompleted = task.subtasks 
+          const allSubtasksCompleted = task.subtasks
             ? task.subtasks.every(subtask => subtask.status === 'completed')
             : false;
 
-          const isEffectivelyCompleted = task.status === 'completed' || 
+          const isEffectivelyCompleted = task.status === 'completed' ||
             (task.subtasks && task.subtasks.length > 0 && allSubtasksCompleted);
 
-          const matchesStatus = statusFilter === 'all' || 
+          const matchesStatus = statusFilter === 'all' ||
             (statusFilter === 'completed' ? isEffectivelyCompleted : task.status === statusFilter);
           const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
           const matchesRisk = riskFilter === 'all' || task.risk === riskFilter;
-          const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                                task.description?.toLowerCase().includes(searchQuery.toLowerCase());
+          const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            task.description?.toLowerCase().includes(searchQuery.toLowerCase());
 
           return matchesStatus && matchesPriority && matchesRisk && matchesSearch;
         }))
@@ -486,7 +583,8 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       return false;
     }
 
-    if (currentTask.description && currentTask.description.length > 1000) {
+    const plainTextDescription = currentTask.description?.replace(/<[^>]*>/g, '') || '';
+    if (plainTextDescription.length > 1000) {
       toast.error('Опис завдання не може перевищувати 1000 символів');
       return false;
     }
@@ -505,7 +603,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
         toast.error('Дата початку підзавдання не може бути раніше головного завдання');
         return false;
       }
-      
+
       if (currentTask.end_date && parentTask.end_date && new Date(currentTask.end_date) > new Date(parentTask.end_date)) {
         toast.error('Дата завершення підзавдання не може бути пізніше головного завдання');
         return false;
@@ -536,7 +634,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       toast.error(`Дата не може бути раніше початку дошки (${format(boardStartDate, 'dd.MM.yyyy')})`);
       return;
     }
-    
+
     if (boardDeadline && date > boardDeadline) {
       toast.error(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline, 'dd.MM.yyyy')})`);
       return;
@@ -572,7 +670,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       toast.error(`Дата не може бути раніше початку дошки (${format(boardStartDate, 'dd.MM.yyyy')})`);
       return;
     }
-    
+
     if (boardDeadline && date > boardDeadline) {
       toast.error(`Дата не може бути пізніше дедлайну дошки (${format(boardDeadline, 'dd.MM.yyyy')})`);
       return;
@@ -593,9 +691,9 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
   };
 
   const toggleTag = (tagId: string) => {
-    setSelectedTags(prev => 
-      prev.includes(tagId) 
-        ? prev.filter(id => id !== tagId) 
+    setSelectedTags(prev =>
+      prev.includes(tagId)
+        ? prev.filter(id => id !== tagId)
         : [...prev, tagId]
     );
   };
@@ -666,7 +764,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
         toast.error('Дата початку підзавдання не може бути раніше батьківського завдання');
         return;
       }
-      
+
       if (currentTask.end_date && parentTask.end_date && new Date(currentTask.end_date) > new Date(parentTask.end_date)) {
         toast.error('Дата завершення підзавдання не може бути пізніше батьківського завдання');
         return;
@@ -714,7 +812,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
 
   const deleteTask = async () => {
     if (!currentTask) return;
-    
+
     toast('Ви впевнені, що хочете видалити це завдання?', {
       action: {
         label: 'Видалити',
@@ -723,8 +821,8 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
             const promise = router.delete(`/tasks/${currentTask.id}`, {
               onSuccess: () => {
                 setIsEditModalOpen(false);
-                setTaskList(prev => 
-                  prev.filter(task => 
+                setTaskList(prev =>
+                  prev.filter(task =>
                     task.id !== currentTask.id && task.parent_id !== currentTask.id
                   )
                 );
@@ -750,7 +848,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       },
       cancel: {
         label: 'Скасувати',
-        onClick: () => {}
+        onClick: () => { }
       },
       duration: 10000
     });
@@ -769,7 +867,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Мої завдання" />
       <Toaster position="top-center" richColors />
-      
+
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <h1 className="text-3xl font-bold text-white">Мої завдання</h1>
@@ -794,7 +892,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
               className="border-white/10 text-white placeholder-gray-400 focus:border-blue-400 pl-10"
             />
             {searchQuery && (
-              <button 
+              <button
                 onClick={() => {
                   setSearchQuery('');
                   setIsSearching(true);
@@ -806,8 +904,8 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
             )}
           </div>
 
-          <Select 
-            value={statusFilter} 
+          <Select
+            value={statusFilter}
             onValueChange={(value) => {
               setStatusFilter(value);
               setIsSearching(true);
@@ -825,8 +923,8 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
             </SelectContent>
           </Select>
 
-          <Select 
-            value={priorityFilter} 
+          <Select
+            value={priorityFilter}
             onValueChange={(value) => {
               setPriorityFilter(value);
               setIsSearching(true);
@@ -843,8 +941,8 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
             </SelectContent>
           </Select>
 
-          <Select 
-            value={riskFilter} 
+          <Select
+            value={riskFilter}
             onValueChange={(value) => {
               setRiskFilter(value);
               setIsSearching(true);
@@ -966,9 +1064,9 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                 </button>
               </Badge>
             )}
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               className="text-white hover:bg-white/10"
               onClick={clearAllFilters}
             >
@@ -991,24 +1089,24 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                     {group.tasks.length} завдань
                   </Badge>
                 </div>
-                
+
                 <div className="grid grid-cols-1 gap-4">
                   {group.tasks.map((task) => (
                     <div key={task.id}>
-                      <TaskItem 
-                        task={task} 
+                      <TaskItem
+                        task={task}
                         onClick={() => handleTaskClick(task)}
                         onToggleExpand={() => toggleTaskExpansion(task.id)}
                         isExpanded={expandedTasks[task.id]}
                         onMarkAsCompleted={markAsCompleted}
                       />
-                      
+
                       {expandedTasks[task.id] && task.subtasks && task.subtasks.length > 0 && (
                         <div className="ml-8 space-y-3 mt-2">
                           {task.subtasks.map((subtask) => (
-                            <TaskItem 
-                              key={subtask.id} 
-                              task={subtask} 
+                            <TaskItem
+                              key={subtask.id}
+                              task={subtask}
                               onClick={() => handleTaskClick(subtask)}
                               onMarkAsCompleted={markAsCompleted}
                             />
@@ -1023,8 +1121,8 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
           ) : (
             <div className="text-center py-12">
               <p className="text-gray-400 text-lg">Завдань не знайдено</p>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="mt-4 text-white border-white/10 hover:bg-white/10"
                 onClick={clearAllFilters}
               >
@@ -1042,7 +1140,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
               <DialogHeader>
                 <DialogTitle className="text-xl">Редагувати завдання</DialogTitle>
               </DialogHeader>
-              
+
               <div className="space-y-4 py-4">
                 <div>
                   <Input
@@ -1054,12 +1152,24 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                 </div>
 
                 <div>
-                  <Textarea
+                  <style>{quillStyles}</style>
+                  <ReactQuill
                     value={currentTask.description || ''}
-                    onChange={(e) => handleTaskUpdate('description', e.target.value)}
-                    placeholder="Опис завдання"
-                    className="min-h-[100px]"
+                    onChange={(value) => handleTaskUpdate('description', value)}
+                    modules={{
+                      toolbar: [
+                        ['bold', 'italic', 'underline'],
+                        ['link'],
+                        [{ list: 'ordered' }, { list: 'bullet' }],
+                      ],
+                    }}
+                    formats={['bold', 'italic', 'underline', 'link', 'list', 'bullet']}
+                    theme="snow"
+                    style={{ marginBottom: '8px' }}
                   />
+                  <div className="text-xs text-muted-foreground mt-1 text-right">
+                    {currentTask.description?.replace(/<[^>]*>/g, '').length || 0}/1000 символів
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -1105,7 +1215,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                           value={currentTask.start_date ? format(new Date(currentTask.start_date), 'HH') : '--'}
                           onValueChange={(hour) => {
                             if (hour !== '--') {
-                              const newDate = currentTask.start_date 
+                              const newDate = currentTask.start_date
                                 ? new Date(currentTask.start_date)
                                 : new Date();
                               newDate.setHours(parseInt(hour));
@@ -1152,7 +1262,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                           </SelectContent>
                         </Select>
                       </div>
-                      
+
                     </div>
                   </div>
 
@@ -1199,7 +1309,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                           value={currentTask.end_date ? format(new Date(currentTask.end_date), 'HH') : '--'}
                           onValueChange={(hour) => {
                             if (hour !== '--') {
-                              const newDate = currentTask.end_date 
+                              const newDate = currentTask.end_date
                                 ? new Date(currentTask.end_date)
                                 : new Date();
                               newDate.setHours(parseInt(hour));
@@ -1246,7 +1356,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                           </SelectContent>
                         </Select>
                       </div>
-                      
+
                     </div>
                   </div>
                 </div>
@@ -1265,10 +1375,9 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                         {priorityOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             <div className="flex items-center">
-                              <Flag className={`h-4 w-4 mr-2 ${
-                                option.value === 'high' ? 'text-red-500' : 
-                                option.value === 'medium' ? 'text-yellow-500' : 'text-green-500'
-                              }`} />
+                              <Flag className={`h-4 w-4 mr-2 ${option.value === 'high' ? 'text-red-500' :
+                                  option.value === 'medium' ? 'text-yellow-500' : 'text-green-500'
+                                }`} />
                               {option.label}
                             </div>
                           </SelectItem>
@@ -1290,10 +1399,9 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                         {riskOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             <div className="flex items-center">
-                              <AlertCircle className={`h-4 w-4 mr-2 ${
-                                option.value === 'high' ? 'text-red-500' : 
-                                option.value === 'medium' ? 'text-yellow-500' : 'text-green-500'
-                              }`} />
+                              <AlertCircle className={`h-4 w-4 mr-2 ${option.value === 'high' ? 'text-red-500' :
+                                  option.value === 'medium' ? 'text-yellow-500' : 'text-green-500'
+                                }`} />
                               {option.label}
                             </div>
                           </SelectItem>
@@ -1309,8 +1417,8 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-full justify-start">
                         <Tag className="h-4 w-4 mr-2" />
-                        {selectedTags.length > 0 
-                          ? `${selectedTags.length} обрано` 
+                        {selectedTags.length > 0
+                          ? `${selectedTags.length} обрано`
                           : 'Оберіть теги'}
                       </Button>
                     </PopoverTrigger>
@@ -1322,7 +1430,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                           onChange={(e) => setTagSearch(e.target.value)}
                           className="mb-2"
                         />
-                        
+
                         <div className="flex items-center gap-2 mb-2 p-2 rounded-lg">
                           <Input
                             placeholder="Новий тег"
@@ -1330,10 +1438,10 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                             onChange={(e) => setNewTagName(e.target.value)}
                             className="flex-1"
                             maxLength={MAX_TAG_LENGTH}
-                            />
-                            <span className="text-xs text-muted-foreground">
-                              {newTagName.length}/{MAX_TAG_LENGTH}
-                            </span>
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {newTagName.length}/{MAX_TAG_LENGTH}
+                          </span>
                           <Popover>
                             <PopoverTrigger asChild>
                               <button
@@ -1349,11 +1457,10 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                                     <button
                                       key={color}
                                       type="button"
-                                      className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${
-                                        newTagColor === color
+                                      className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${newTagColor === color
                                           ? 'border-2 border-white dark:border-gray-900 shadow-md'
                                           : 'border border-transparent'
-                                      } ${color === '#FFFFFF' ? 'border border-gray-300' : ''}`}
+                                        } ${color === '#FFFFFF' ? 'border border-gray-300' : ''}`}
                                       style={{ backgroundColor: color }}
                                       onClick={() => setNewTagColor(color)}
                                     />
@@ -1364,11 +1471,10 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                                     <button
                                       key={color}
                                       type="button"
-                                      className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${
-                                        newTagColor === color
+                                      className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${newTagColor === color
                                           ? 'border-2 border-white dark:border-gray-900 shadow-md'
                                           : 'border border-transparent'
-                                      }`}
+                                        }`}
                                       style={{ backgroundColor: color }}
                                       onClick={() => setNewTagColor(color)}
                                     />
@@ -1385,40 +1491,40 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                             <Plus className="h-4 w-4" />
                           </Button>
                         </div>
-                        
+
                         <div className="max-h-[200px] overflow-y-auto">
                           {availableTags
-                            .filter(tag => 
+                            .filter(tag =>
                               tag.name.toLowerCase().includes(tagSearch.toLowerCase())
                             )
                             .length === 0 ? (
-                              <div className="text-sm text-muted-foreground py-2 text-center">
-                                Тегів не знайдено
-                              </div>
-                            ) : (
-                              <div className="space-y-1">
-                                {availableTags
-                                  .filter(tag => 
-                                    tag.name.toLowerCase().includes(tagSearch.toLowerCase())
-                                  )
-                                  .map((tag) => (
+                            <div className="text-sm text-muted-foreground py-2 text-center">
+                              Тегів не знайдено
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              {availableTags
+                                .filter(tag =>
+                                  tag.name.toLowerCase().includes(tagSearch.toLowerCase())
+                                )
+                                .map((tag) => (
+                                  <div
+                                    key={tag.id}
+                                    className="flex items-center p-2 rounded hover:bg-accent cursor-pointer"
+                                    onClick={() => toggleTag(tag.id)}
+                                  >
                                     <div
-                                      key={tag.id}
-                                      className="flex items-center p-2 rounded hover:bg-accent cursor-pointer"
-                                      onClick={() => toggleTag(tag.id)}
-                                    >
-                                      <div 
-                                        className="w-3 h-3 rounded-full mr-2" 
-                                        style={{ backgroundColor: tag.color }}
-                                      />
-                                      <span>{tag.name}</span>
-                                      {selectedTags.includes(tag.id) && (
-                                        <Check className="ml-auto h-4 w-4" />
-                                      )}
-                                    </div>
-                                  ))}
-                              </div>
-                            )}
+                                      className="w-3 h-3 rounded-full mr-2"
+                                      style={{ backgroundColor: tag.color }}
+                                    />
+                                    <span>{tag.name}</span>
+                                    {selectedTags.includes(tag.id) && (
+                                      <Check className="ml-auto h-4 w-4" />
+                                    )}
+                                  </div>
+                                ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </PopoverContent>
@@ -1427,8 +1533,8 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                     {selectedTags.map(tagId => {
                       const tag = availableTags.find(t => t.id === tagId);
                       return tag ? (
-                        <TagBadge 
-                          key={tag.id} 
+                        <TagBadge
+                          key={tag.id}
                           tag={tag}
                           onRemove={() => toggleTag(tag.id)}
                         />
@@ -1438,8 +1544,8 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                 </div>
 
                 <div className="flex justify-between pt-4">
-                  <Button 
-                    type="button" 
+                  <Button
+                    type="button"
                     variant="destructive"
                     onClick={deleteTask}
                   >
@@ -1447,15 +1553,15 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                     Видалити
                   </Button>
                   <div className="flex gap-2">
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       variant="outline"
                       onClick={() => setIsEditModalOpen(false)}
                     >
                       Скасувати
                     </Button>
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       onClick={updateTask}
                     >
                       Зберегти зміни

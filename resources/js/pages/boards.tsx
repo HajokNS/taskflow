@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import DOMPurify from 'dompurify';
 
 interface Board {
   id: string;
@@ -117,7 +118,7 @@ export default function Boards({ boards, favorites, filters = {} }: Props) {
               />
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               {searchValue && (
-                <button 
+                <button
                   onClick={clearSearch}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
@@ -213,7 +214,7 @@ export default function Boards({ boards, favorites, filters = {} }: Props) {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Всі дошки</h2>
-            
+
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -265,6 +266,11 @@ function BoardCard({ board, getContrastText, formatDateTime }: {
     opacity: 0.7
   };
 
+  const sanitizedDescription = DOMPurify.sanitize(board.description || '', {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'a', 'ul', 'ol', 'li', 'blockquote'],
+    ALLOWED_ATTR: ['href', 'target', 'rel']
+  });
+
   return (
     <Link
       href={`/boards/${board.id}`}
@@ -297,20 +303,43 @@ function BoardCard({ board, getContrastText, formatDateTime }: {
 
       <div className="mt-2 flex-1 overflow-hidden">
         {board.description && (
-          <p
+          <div
             className="text-sm"
             style={{
               color: textColor,
               opacity: 0.9,
-              display: '-webkit-box',
-              WebkitLineClamp: 3,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
+              overflow: 'hidden'
             }}
           >
-            {board.description}
-          </p>
+            <style>{`
+    .description-content p {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin: 0 0 0.5rem;
+    }
+    .description-content ul {
+      list-style-type: disc;
+      padding-left: 1.25rem;
+      margin: 0.5rem 0;
+    }
+    .description-content ol {
+      list-style-type: decimal;
+      padding-left: 1.25rem;
+      margin: 0.5rem 0;
+    }
+    .description-content li {
+      margin-bottom: 0.25rem;
+    }
+  `}</style>
+
+            <div
+              className="description-content"
+              dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
+            />
+          </div>
         )}
       </div>
 

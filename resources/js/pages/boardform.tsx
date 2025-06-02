@@ -8,7 +8,8 @@ import { format, isBefore, differenceInDays, isSameDay, addDays } from 'date-fns
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { toast, Toaster } from 'sonner';
-
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 const breadcrumbs: BreadcrumbItem[] = [
   {
     title: 'Дошки',
@@ -17,9 +18,73 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const COLOR_PALETTE = [
-  '#FFFFFF', '#000000', '#FF6900', '#FCB900', '#7BDCB5', 
+  '#FFFFFF', '#000000', '#FF6900', '#FCB900', '#7BDCB5',
   '#8ED1FC', '#0693E3', '#ABB8C3', '#EB144C', '#00D084'
 ];
+
+const quillStyles = `
+    .ql-container {
+      background: rgba(10, 10, 15, 0.9);
+      border: 1px solid rgba(156, 39, 176, 0.3);
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 0.9rem;
+      backdrop-filter: blur(15px);
+      outline: none;
+    }
+    .ql-editor {
+      min-height: 150px;
+      padding: 12px;
+      color: #e0e0e0;
+      outline: none;
+    }
+    .ql-editor.ql-blank::before {
+      content: "Введіть вміст вашого поста...";
+      color: rgba(224, 224, 224, 0.5);
+      font-style: italic;
+      pointer-events: none;
+      position: absolute;
+    }
+    .ql-container:focus, .ql-editor:focus {
+      border: 1px solid #ff4081;
+      border-radius: 4px;
+      box-shadow: 0 0 10px rgba(255, 64, 129, 0.3);
+      outline: none;
+    }
+    .ql-toolbar {
+      background: rgba(10, 10, 15, 0.9);
+      border: 1px solid rgba(156, 39, 176, 0.3);
+      border-bottom: none;
+      border-radius: 4px 4px 0 0;
+      backdrop-filter: blur(15px);
+    }
+    .ql-toolbar .ql-formats {
+      margin-right: 8px;
+    }
+    .ql-toolbar .ql-stroke {
+      stroke: #e0e0e0;
+    }
+    .ql-toolbar .ql-fill {
+      fill: #e0e0e0;
+    }
+    .ql-toolbar .ql-picker {
+      color: #e0e0e0;
+      font-size: 0.8rem;
+    }
+    .ql-toolbar .ql-active .ql-stroke,
+    .ql-toolbar .ql-active .ql-fill {
+      stroke: #ff4081;
+      fill: #ff4081;
+    }
+    .ql-toolbar .ql-picker-label:hover,
+    .ql-toolbar .ql-picker-item:hover {
+      color: #ff4081;
+    }
+    .ql-editor a {
+      color: #ff4081;
+    }
+  `;
+
 
 export default function BoardFormPage() {
   const today = new Date();
@@ -96,7 +161,7 @@ export default function BoardFormPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      
+
       const oversizedFiles = newFiles.filter(file => file.size > 10 * 1024 * 1024);
       if (oversizedFiles.length > 0) {
         toast.error(`Деякі файли перевищують 10MB: ${oversizedFiles.map(f => f.name).join(', ')}`);
@@ -123,10 +188,10 @@ export default function BoardFormPage() {
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     if (e.dataTransfer.files) {
       const newFiles = Array.from(e.dataTransfer.files);
-      
+
       const oversizedFiles = newFiles.filter(file => file.size > 10 * 1024 * 1024);
       if (oversizedFiles.length > 0) {
         toast.error(`Деякі файли перевищують 10MB: ${oversizedFiles.map(f => f.name).join(', ')}`);
@@ -174,7 +239,7 @@ export default function BoardFormPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -182,7 +247,7 @@ export default function BoardFormPage() {
     setIsSubmitting(true);
 
     const formData = new FormData();
-    
+
     formData.append('title', boardTitle);
     formData.append('description', description);
     formData.append('is_favorite', isFavorite ? '1' : '0');
@@ -191,7 +256,7 @@ export default function BoardFormPage() {
     formData.append('estimated_hours', String(hours));
     formData.append('estimated_budget', String(budget));
     formData.append('color', color);
-    
+
     files.forEach((file, index) => {
       formData.append(`attachments[${index}]`, file);
     });
@@ -215,7 +280,7 @@ export default function BoardFormPage() {
     <AppLayout breadcrumbs={breadcrumbs}>
       <Toaster position="top-center" richColors />
       <Head title="Нова дошка" />
-      
+
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <form onSubmit={handleSubmit}>
           {/* Заголовок */}
@@ -224,33 +289,32 @@ export default function BoardFormPage() {
               <input
                 type="text"
                 placeholder="Назва дошки *"
-                className={`text-3xl font-bold text-gray-800 dark:text-white bg-transparent border-none focus:ring-0 px-0 w-full focus:border-b ${
-                  errors.title ? 'border-b-red-500' : 'focus:border-gray-300 dark:focus:border-gray-500'
-                } focus:outline-none focus:rounded-none transition-all duration-200`}
+                className={`text-3xl font-bold text-gray-800 dark:text-white bg-transparent border-none focus:ring-0 px-0 w-full focus:border-b ${errors.title ? 'border-b-red-500' : 'focus:border-gray-300 dark:focus:border-gray-500'
+                  } focus:outline-none focus:rounded-none transition-all duration-200`}
                 value={boardTitle}
                 onChange={(e) => {
                   setBoardTitle(e.target.value);
-                  if (errors.title) setErrors({...errors, title: ''});
+                  if (errors.title) setErrors({ ...errors, title: '' });
                 }}
                 maxLength={50}
               />
-              
+
             </div>
             <div className="flex items-center gap-2 relative">
-              <button 
+              <button
                 type="button"
                 onClick={() => setShowColorPicker(!showColorPicker)}
                 className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                 title="Вибрати колір"
               >
-                <div 
+                <div
                   className="w-8 h-8 rounded-full border-2 border-gray-300 dark:border-gray-600"
                   style={{ backgroundColor: color }}
                 />
               </button>
-              
+
               {showColorPicker && (
-                <div 
+                <div
                   ref={colorPickerRef}
                   className="absolute top-full left-0 mt-2 z-10 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700"
                   style={{ width: '220px' }}
@@ -261,14 +325,12 @@ export default function BoardFormPage() {
                         <button
                           key={c}
                           type="button"
-                          className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${
-                            color === c 
-                              ? 'border-2 border-white dark:border-gray-900 shadow-md' 
-                              : 'border border-transparent'
-                          } ${
-                            c === '#FFFFFF' ? 'border border-gray-300' : ''
-                          }`}
-                          style={{ 
+                          className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${color === c
+                            ? 'border-2 border-white dark:border-gray-900 shadow-md'
+                            : 'border border-transparent'
+                            } ${c === '#FFFFFF' ? 'border border-gray-300' : ''
+                            }`}
+                          style={{
                             backgroundColor: c,
                             boxShadow: color === c ? `0 0 0 2px ${c === '#FFFFFF' ? '#000000' : c}` : 'none'
                           }}
@@ -279,18 +341,17 @@ export default function BoardFormPage() {
                         />
                       ))}
                     </div>
-                    
+
                     <div className="grid grid-cols-5 gap-3">
                       {COLOR_PALETTE.slice(5, 10).map((c) => (
                         <button
                           key={c}
                           type="button"
-                          className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${
-                            color === c 
-                              ? 'border-2 border-white dark:border-gray-900 shadow-md' 
-                              : 'border border-transparent'
-                          }`}
-                          style={{ 
+                          className={`w-8 h-8 rounded-full hover:scale-110 transition-transform ${color === c
+                            ? 'border-2 border-white dark:border-gray-900 shadow-md'
+                            : 'border border-transparent'
+                            }`}
+                          style={{
                             backgroundColor: c,
                             boxShadow: color === c ? `0 0 0 2px ${c}` : 'none'
                           }}
@@ -304,7 +365,7 @@ export default function BoardFormPage() {
                   </div>
                 </div>
               )}
-              <button 
+              <button
                 type="button"
                 onClick={toggleFavorite}
                 className={`transition-colors ${isFavorite ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'} dark:${isFavorite ? 'text-yellow-300' : 'text-gray-400 hover:text-yellow-300'}`}
@@ -319,17 +380,25 @@ export default function BoardFormPage() {
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 dark:text-white">
               <span>Опис проекту</span>
             </h2>
-            <textarea
-              placeholder="Додайте опис вашого проекту..."
-              className={`w-full min-h-[120px] p-3 border ${
-                errors.description ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'
-              } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-transparent dark:text-white`}
+            <style>{quillStyles}</style>
+            <ReactQuill
               value={description}
               onChange={(e) => {
-                setDescription(e.target.value);
-                if (errors.description) setErrors({...errors, description: ''});
+                setDescription(e);
+                if (errors.description) setErrors({ ...errors, description: '' });
               }}
+              modules={{
+                toolbar: [
+                  ['bold', 'italic', 'underline'],
+                  ['link'],
+                  [{ list: 'ordered' }, { list: 'bullet' }],
+                ],
+              }}
+              formats={['bold', 'italic', 'underline', 'link', 'list', 'bullet']}
+              theme="snow"
+              style={{ marginBottom: '24px' }}
             />
+
             <div className="flex justify-between mt-1">
               <div className="flex items-center">
                 {errors.description && (
@@ -343,34 +412,33 @@ export default function BoardFormPage() {
                 {description.length}/1000 символів
               </div>
             </div>
-            
+
             <div className="mt-4">
               <h3 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Файли проекту</h3>
-              
-              <div 
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                  isDragging 
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                    : 'border-gray-300 dark:border-gray-600'
-                }`}
+
+              <div
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                  : 'border-gray-300 dark:border-gray-600'
+                  }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                <input 
-                  type="file" 
+                <input
+                  type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="hidden"
                   multiple
                   accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx"
                 />
-                
+
                 <Paperclip className="h-10 w-10 mx-auto text-gray-400 dark:text-gray-500 mb-2" />
                 <p className="text-gray-500 dark:text-gray-400 mb-2">
                   {isDragging ? 'Відпустіть файли для завантаження' : 'Перетягніть файли сюди або'}
                 </p>
-                <button 
+                <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="text-blue-600 hover:text-blue-800 font-medium dark:text-blue-400 dark:hover:text-blue-300"
@@ -379,14 +447,14 @@ export default function BoardFormPage() {
                 </button>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">PNG, JPG, PDF, DOC, XLS (до 10MB)</p>
               </div>
-              
+
               {errors.files && (
                 <div className="flex items-center mt-2 text-sm text-red-500">
                   <AlertCircle className="h-4 w-4 mr-1" />
                   {errors.files}
                 </div>
               )}
-              
+
               {files.length > 0 && (
                 <div className="mt-4 space-y-2">
                   {files.map((file, index) => (
@@ -484,7 +552,7 @@ export default function BoardFormPage() {
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 dark:text-white">
               <span>План</span>
             </h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <h3 className="flex items-center gap-2 text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
@@ -493,18 +561,17 @@ export default function BoardFormPage() {
                 </h3>
                 <input
                   type="number"
-                  className={`w-full p-2 border ${
-                    errors.hours ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                  } rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-transparent dark:text-white`}
+                  className={`w-full p-2 border ${errors.hours ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    } rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-transparent dark:text-white`}
                   value={hours}
                   onChange={(e) => {
                     setHours(Number(e.target.value));
-                    if (errors.hours) setErrors({...errors, hours: ''});
+                    if (errors.hours) setErrors({ ...errors, hours: '' });
                   }}
                 />
-                
+
               </div>
-              
+
               <div>
                 <h3 className="flex items-center gap-2 text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
                   <DollarSign className="h-4 w-4 text-blue-500" />
@@ -512,31 +579,30 @@ export default function BoardFormPage() {
                 </h3>
                 <input
                   type="number"
-                  className={`w-full p-2 border ${
-                    errors.budget ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                  } rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-transparent dark:text-white`}
+                  className={`w-full p-2 border ${errors.budget ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    } rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-transparent dark:text-white`}
                   value={budget}
                   onChange={(e) => {
                     setBudget(Number(e.target.value));
-                    if (errors.budget) setErrors({...errors, budget: ''});
+                    if (errors.budget) setErrors({ ...errors, budget: '' });
                   }}
                   step="1"
                 />
-                
+
               </div>
             </div>
           </section>
 
           {/* Кнопки дій */}
           <div className="flex justify-end gap-3">
-            <button 
+            <button
               type="button"
               className="px-6 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
               onClick={() => router.visit('/boards')}
             >
               Скасувати
             </button>
-            <button 
+            <button
               type="submit"
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 min-w-32 disabled:opacity-70"
               disabled={isSubmitting}
