@@ -1,6 +1,6 @@
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
-import { ArrowLeft, Plus, Minus, Calendar as CalendarIcon, Tag, AlertCircle, Flag, Check, List, Clock, X, Star } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Calendar as CalendarIcon, Tag, AlertCircle, Flag, Check, List, Clock, X, Star, Paperclip, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -30,7 +30,7 @@ const quillStyles = `
     font-size: 1rem;
     backdrop-filter: blur(8px);
     outline: none;
-    height: 150px; /* 🔥 Фіксована висота */
+    height: 150px;
     max-height: 200px;
   }
 
@@ -133,7 +133,8 @@ export default function TaskCreator() {
         priority: 'medium',
         risk: 'low',
         description: '',
-        tags: [] as string[]
+        tags: [] as string[],
+        files: [] as File[]
     }]);
 
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -145,6 +146,8 @@ export default function TaskCreator() {
     const [isCreatingTag, setIsCreatingTag] = useState(false);
     const popoverRef = useRef<HTMLDivElement>(null);
     const colorPopoverRef = useRef<HTMLDivElement>(null);
+    const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+    const mainTaskFileInputRef = useRef<HTMLInputElement>(null);
 
     const [taskData, setTaskData] = useState({
         board_id: board_id,
@@ -157,6 +160,7 @@ export default function TaskCreator() {
         status: 'active',
         is_completed: false,
         parent_id: null,
+        files: [] as File[]
     });
 
     const statusOptions = [
@@ -455,7 +459,8 @@ export default function TaskCreator() {
             priority: 'medium',
             risk: 'low',
             description: '',
-            tags: []
+            tags: [],
+            files: []
         }]);
     };
 
@@ -481,6 +486,91 @@ export default function TaskCreator() {
             [field]: value
         };
         setSubtasks(newSubtasks);
+    };
+
+    const handleMainTaskFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const newFiles = Array.from(e.target.files);
+            const oversizedFiles = newFiles.filter(file => file.size > 10 * 1024 * 1024);
+            
+            if (oversizedFiles.length > 0) {
+                toast.error(`Деякі файли перевищують 10MB: ${oversizedFiles.map(f => f.name).join(', ')}`);
+                return;
+            }
+
+            setTaskData({
+                ...taskData,
+                files: [...taskData.files, ...newFiles.filter(file => file.size <= 10 * 1024 * 1024)]
+            });
+        }
+    };
+
+    const removeMainTaskFile = (fileIndex: number) => {
+        setTaskData({
+            ...taskData,
+            files: taskData.files.filter((_, i) => i !== fileIndex)
+        });
+    };
+
+    const handleMainTaskDrop = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        if (e.dataTransfer.files) {
+            const newFiles = Array.from(e.dataTransfer.files);
+            const oversizedFiles = newFiles.filter(file => file.size > 10 * 1024 * 1024);
+            
+            if (oversizedFiles.length > 0) {
+                toast.error(`Деякі файли перевищують 10MB: ${oversizedFiles.map(f => f.name).join(', ')}`);
+                return;
+            }
+
+            setTaskData({
+                ...taskData,
+                files: [...taskData.files, ...newFiles.filter(file => file.size <= 10 * 1024 * 1024)]
+            });
+        }
+    };
+
+    const handleFileChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const newFiles = Array.from(e.target.files);
+            const oversizedFiles = newFiles.filter(file => file.size > 10 * 1024 * 1024);
+            
+            if (oversizedFiles.length > 0) {
+                toast.error(`Деякі файли перевищують 10MB: ${oversizedFiles.map(f => f.name).join(', ')}`);
+                return;
+            }
+
+            const updatedSubtasks = [...subtasks];
+            updatedSubtasks[index].files = [...updatedSubtasks[index].files, ...newFiles.filter(file => file.size <= 10 * 1024 * 1024)];
+            setSubtasks(updatedSubtasks);
+        }
+    };
+
+    const removeFile = (subtaskIndex: number, fileIndex: number) => {
+        const updatedSubtasks = [...subtasks];
+        updatedSubtasks[subtaskIndex].files = updatedSubtasks[subtaskIndex].files.filter((_, i) => i !== fileIndex);
+        setSubtasks(updatedSubtasks);
+    };
+
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+    };
+
+    const handleDrop = (index: number, e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        if (e.dataTransfer.files) {
+            const newFiles = Array.from(e.dataTransfer.files);
+            const oversizedFiles = newFiles.filter(file => file.size > 10 * 1024 * 1024);
+            
+            if (oversizedFiles.length > 0) {
+                toast.error(`Деякі файли перевищують 10MB: ${oversizedFiles.map(f => f.name).join(', ')}`);
+                return;
+            }
+
+            const updatedSubtasks = [...subtasks];
+            updatedSubtasks[index].files = [...updatedSubtasks[index].files, ...newFiles.filter(file => file.size <= 10 * 1024 * 1024)];
+            setSubtasks(updatedSubtasks);
+        }
     };
 
     const toggleTag = (tagId: string) => {
@@ -537,7 +627,6 @@ export default function TaskCreator() {
             return;
         }
 
-        // Перевірка на існуючий тег
         const tagExists = availableTags.some(
             tag => tag.name.toLowerCase() === newTagName.trim().toLowerCase()
         );
@@ -607,6 +696,11 @@ export default function TaskCreator() {
             return false;
         }
 
+        if (taskData.files.length > 5) {
+            toast.error('Максимально 5 файлів для основного завдання');
+            return false;
+        }
+
         return true;
     };
 
@@ -654,6 +748,11 @@ export default function TaskCreator() {
                 toast.error(`Підзадача ${index + 1}: будь ласка, вкажіть кінцеву дату`);
                 return false;
             }
+
+            if (subtask.files.length > 5) {
+                toast.error(`Підзадача ${index + 1}: максимально 5 файлів`);
+                return false;
+            }
         }
         return true;
     };
@@ -681,19 +780,24 @@ export default function TaskCreator() {
                     return;
                 }
 
-                const taskPayload = {
-                    title: taskData.title,
-                    description: taskData.description,
-                    start_date: taskData.start_date || null,
-                    end_date: taskData.end_date || null,
-                    priority: taskData.priority,
-                    risk: taskData.risk,
-                    board_id: taskData.board_id,
-                    tags: selectedTags,
-                    parent_id: null
-                };
+                const taskPayload = new FormData();
+                taskPayload.append('title', taskData.title);
+                taskPayload.append('description', taskData.description);
+                taskPayload.append('start_date', taskData.start_date || '');
+                taskPayload.append('end_date', taskData.end_date || '');
+                taskPayload.append('priority', taskData.priority);
+                taskPayload.append('risk', taskData.risk);
+                taskPayload.append('board_id', taskData.board_id);
+                taskPayload.append('parent_id', '');
 
-                await axios.post(route('tasks.store'), taskPayload);
+                selectedTags.forEach(tag => taskPayload.append('tags[]', tag));
+                taskData.files.forEach((file, i) => taskPayload.append(`attachments[${i}]`, file));
+
+                await axios.post(route('tasks.store'), taskPayload, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
                 toast.success('Завдання успішно створено');
                 router.visit(`/boards/${board_id}`);
             } else if (mode === 'subtasks') {
@@ -706,7 +810,6 @@ export default function TaskCreator() {
                     return;
                 }
 
-                // Додаткова перевірка дат для всіх підзадач
                 for (let i = 0; i < subtasks.length; i++) {
                     if (!validateSubtaskDates(i)) {
                         return;
@@ -715,24 +818,29 @@ export default function TaskCreator() {
 
                 let successCount = 0;
                 const promises = subtasks.map(subtask => {
-                    const subtaskPayload = {
-                        title: subtask.title,
-                        description: subtask.description,
-                        start_date: subtask.start_date || null,
-                        end_date: subtask.end_date || null,
-                        priority: subtask.priority,
-                        risk: subtask.risk,
-                        board_id: board_id,
-                        tags: subtask.tags,
-                        parent_id: selectedTask
-                    };
+                    const formData = new FormData();
+                    formData.append('title', subtask.title);
+                    formData.append('description', subtask.description);
+                    formData.append('start_date', subtask.start_date || '');
+                    formData.append('end_date', subtask.end_date || '');
+                    formData.append('priority', subtask.priority);
+                    formData.append('risk', subtask.risk);
+                    formData.append('board_id', board_id);
+                    formData.append('parent_id', selectedTask);
+                    
+                    subtask.tags.forEach(tag => formData.append('tags[]', tag));
+                    subtask.files.forEach((file, i) => formData.append(`attachments[${i}]`, file));
 
-                    return axios.post(route('tasks.store'), subtaskPayload)
-                        .then(() => successCount++)
-                        .catch(error => {
-                            console.error('Помилка при створенні підзадачі:', error);
-                            toast.error(`Помилка при створенні підзадачі: ${subtask.title}`);
-                        });
+                    return axios.post(route('tasks.store'), formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    })
+                    .then(() => successCount++)
+                    .catch(error => {
+                        console.error('Помилка при створенні підзадачі:', error);
+                        toast.error(`Помилка при створенні підзадачі: ${subtask.title}`);
+                    });
                 });
 
                 await Promise.all(promises);
@@ -1265,6 +1373,64 @@ export default function TaskCreator() {
                                         </Popover>
                                         {renderTagBadges(selectedTags, toggleTag)}
                                     </div>
+
+                                    <div className="mt-4">
+                                        <h3 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Файли завдання</h3>
+                                        
+                                        <div
+                                            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors border-gray-300 dark:border-gray-600`}
+                                            onDragOver={handleDragOver}
+                                            onDrop={handleMainTaskDrop}
+                                        >
+                                            <input
+                                                type="file"
+                                                ref={mainTaskFileInputRef}
+                                                onChange={handleMainTaskFileChange}
+                                                className="hidden"
+                                                multiple
+                                                accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx"
+                                            />
+                                            
+                                            <Paperclip className="h-10 w-10 mx-auto text-gray-400 dark:text-gray-500 mb-2" />
+                                            <p className="text-gray-500 dark:text-gray-400 mb-2">
+                                                Перетягніть файли сюди або
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => mainTaskFileInputRef.current?.click()}
+                                                className="text-blue-600 hover:text-blue-800 font-medium dark:text-blue-400 dark:hover:text-blue-300"
+                                            >
+                                                Виберіть файли
+                                            </button>
+                                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">PNG, JPG, PDF, DOC, XLS (до 10MB)</p>
+                                        </div>
+
+                                        {taskData.files.length > 0 && (
+                                            <div className="mt-4 space-y-2">
+                                                {taskData.files.map((file, fileIndex) => (
+                                                    <div key={fileIndex} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                        <div className="flex items-center gap-2 overflow-hidden">
+                                                            <Paperclip className="h-4 w-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                                                            <span className="truncate text-sm text-gray-700 dark:text-gray-300">
+                                                                {file.name}
+                                                            </span>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                                {(file.size / 1024 / 1024).toFixed(2)} MB
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeMainTaskFile(fileIndex)}
+                                                            className="text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 p-1"
+                                                            title="Видалити файл"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
@@ -1568,6 +1734,64 @@ export default function TaskCreator() {
                                                             </PopoverContent>
                                                         </Popover>
                                                         {renderTagBadges(subtask.tags, (tagId) => toggleSubtaskTag(index, tagId))}
+                                                    </div>
+
+                                                    <div className="mt-4">
+                                                        <h3 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Файли підзадачі</h3>
+                                                        
+                                                        <div
+                                                            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors border-gray-300 dark:border-gray-600`}
+                                                            onDragOver={handleDragOver}
+                                                            onDrop={(e) => handleDrop(index, e)}
+                                                        >
+                                                            <input
+                                                                type="file"
+                                                                ref={(el) => fileInputRefs.current[index] = el}
+                                                                onChange={(e) => handleFileChange(index, e)}
+                                                                className="hidden"
+                                                                multiple
+                                                                accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx"
+                                                            />
+                                                            
+                                                            <Paperclip className="h-10 w-10 mx-auto text-gray-400 dark:text-gray-500 mb-2" />
+                                                            <p className="text-gray-500 dark:text-gray-400 mb-2">
+                                                                Перетягніть файли сюди або
+                                                            </p>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => fileInputRefs.current[index]?.click()}
+                                                                className="text-blue-600 hover:text-blue-800 font-medium dark:text-blue-400 dark:hover:text-blue-300"
+                                                            >
+                                                                Виберіть файли
+                                                            </button>
+                                                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">PNG, JPG, PDF, DOC, XLS (до 10MB)</p>
+                                                        </div>
+
+                                                        {subtask.files.length > 0 && (
+                                                            <div className="mt-4 space-y-2">
+                                                                {subtask.files.map((file, fileIndex) => (
+                                                                    <div key={fileIndex} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                                        <div className="flex items-center gap-2 overflow-hidden">
+                                                                            <Paperclip className="h-4 w-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                                                                            <span className="truncate text-sm text-gray-700 dark:text-gray-300">
+                                                                                {file.name}
+                                                                            </span>
+                                                                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                                                {(file.size / 1024 / 1024).toFixed(2)} MB
+                                                                            </span>
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => removeFile(index, fileIndex)}
+                                                                            className="text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 p-1"
+                                                                            title="Видалити файл"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

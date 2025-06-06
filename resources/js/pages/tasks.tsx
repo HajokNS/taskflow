@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
-import { Flag, ChevronDown, ChevronUp, Calendar as CalendarIcon, LayoutDashboard, Search, X, ArrowUpDown, Trash2, Plus, Check, Minus, Tag, AlertCircle, Clock, CheckCircle, Circle } from 'lucide-react';
+import { Flag, ChevronDown, ChevronUp, Calendar as CalendarIcon, LayoutDashboard, Search, X, ArrowUpDown, Trash2, Plus, Check, Minus, Tag, AlertCircle, Clock, CheckCircle, Circle, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -33,6 +33,14 @@ interface Board {
   end_date?: string;
 }
 
+interface Attachment {
+  id?: string;
+  name: string;
+  size: number;
+  url?: string;
+  file?: File;
+}
+
 interface Task {
   id: string;
   title: string;
@@ -50,6 +58,7 @@ interface Task {
   board: Board;
   tags?: Tag[];
   subtasks?: Task[];
+  attachments?: Attachment[];
 }
 
 interface Tag {
@@ -102,7 +111,7 @@ const quillStyles = `
     font-size: 1rem;
     backdrop-filter: blur(8px);
     outline: none;
-    height: 150px; /* 🔥 Фіксована висота */
+    height: 150px;
     max-height: 200px;
   }
 
@@ -181,7 +190,6 @@ const quillStyles = `
     text-decoration: underline;
   }
 `;
-
 
 const getPriorityColor = (priority: string) => {
   switch (priority) {
@@ -351,33 +359,33 @@ const TaskItem = ({
         </CardHeader>
 
         <CardContent className="px-4">
-      {task.description && (
-        <div
-          className={cn(
-            "prose prose-sm dark:prose-invert mb-3 break-words line-clamp-2",
-            isEffectivelyCompleted ? "text-gray-400" : "text-gray-300"
+          {task.description && (
+            <div
+              className={cn(
+                "prose prose-sm dark:prose-invert mb-3 break-words line-clamp-2",
+                isEffectivelyCompleted ? "text-gray-400" : "text-gray-300"
+              )}
+              dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
+            />
           )}
-          dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
-        />
-      )}
 
-      <div className="flex flex-wrap items-center gap-2 mt-2">
-        {(task.start_date || task.end_date) && (
-          <DateRangeDisplay start={task.start_date} end={task.end_date} />
-        )}
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            {(task.start_date || task.end_date) && (
+              <DateRangeDisplay start={task.start_date} end={task.end_date} />
+            )}
 
-        <Badge className={isEffectivelyCompleted ? getStatusColor('completed') : getStatusColor(task.status)}>
-          {isEffectivelyCompleted ? 'Завершене' : getStatusText(task.status)}
-        </Badge>
+            <Badge className={isEffectivelyCompleted ? getStatusColor('completed') : getStatusColor(task.status)}>
+              {isEffectivelyCompleted ? 'Завершене' : getStatusText(task.status)}
+            </Badge>
 
-        <PriorityBadge priority={task.priority} />
-        <RiskBadge risk={task.risk} />
+            <PriorityBadge priority={task.priority} />
+            <RiskBadge risk={task.risk} />
 
-        {task.tags?.map((tag) => (
-          <TagBadge key={tag.id} tag={tag} />
-        ))}
-      </div>
-    </CardContent>
+            {task.tags?.map((tag) => (
+              <TagBadge key={tag.id} tag={tag} />
+            ))}
+          </div>
+        </CardContent>
       </Card>
     </div>
   );
@@ -404,6 +412,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
   const [newTagColor, setNewTagColor] = useState(COLOR_PALETTE[2]);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [taskList, setTaskList] = useState<Task[]>(tasks.data);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -424,7 +433,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       const task = updatedTasks[taskIndex];
       const subtasks = updatedTasks.filter(t => t.parent_id === taskId);
 
-      // Завершити всі підзавдання
       for (let subtask of subtasks) {
         try {
           await axios.post(`/tasks/${subtask.id}/complete-subtask`);
@@ -439,11 +447,9 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
         }
       }
 
-      // Завершити саме завдання
       await router.post(`/tasks/${taskId}/complete`);
       updatedTasks[taskIndex].status = 'completed';
 
-      // Зберегти оновлений список
       setTaskList(updatedTasks);
       toast.success('Завдання успішно завершено');
 
@@ -545,7 +551,15 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
   }, [isSearching, updateUrl]);
 
   const handleTaskClick = (task: Task) => {
-    setCurrentTask(task);
+    setCurrentTask({
+      ...task,
+      attachments: task.attachments?.map(att => ({
+        id: att.id,
+        name: att.name,
+        size: att.size,
+        url: att.url
+      })) || []
+    });
     setSelectedTags(task.tags?.map(tag => tag.id) || []);
     setIsEditModalOpen(true);
   };
@@ -563,6 +577,73 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       ...prev!,
       [field]: value
     }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!currentTask) return;
+    
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files);
+      const oversizedFiles = newFiles.filter(file => file.size > 10 * 1024 * 1024);
+      
+      if (oversizedFiles.length > 0) {
+        toast.error(`Деякі файли перевищують 10MB: ${oversizedFiles.map(f => f.name).join(', ')}`);
+        return;
+      }
+
+      const newAttachments = newFiles.map(file => ({
+        name: file.name,
+        size: file.size,
+        file
+      }));
+
+      setCurrentTask({
+        ...currentTask,
+        attachments: [...currentTask.attachments || [], ...newAttachments]
+      });
+    }
+  };
+
+  const removeFile = (index: number) => {
+    if (!currentTask) return;
+    
+    const newAttachments = [...currentTask.attachments || []];
+    newAttachments.splice(index, 1);
+    
+    setCurrentTask({
+      ...currentTask,
+      attachments: newAttachments
+    });
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (!currentTask) return;
+    
+    if (e.dataTransfer.files) {
+      const newFiles = Array.from(e.dataTransfer.files);
+      const oversizedFiles = newFiles.filter(file => file.size > 10 * 1024 * 1024);
+      
+      if (oversizedFiles.length > 0) {
+        toast.error(`Деякі файли перевищують 10MB: ${oversizedFiles.map(f => f.name).join(', ')}`);
+        return;
+      }
+
+      const newAttachments = newFiles.map(file => ({
+        name: file.name,
+        size: file.size,
+        file
+      }));
+
+      setCurrentTask({
+        ...currentTask,
+        attachments: [...currentTask.attachments || [], ...newAttachments]
+      });
+    }
   };
 
   const validateTaskForm = () => {
@@ -589,6 +670,11 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       return false;
     }
 
+    if (currentTask.attachments && currentTask.attachments.length > 5) {
+      toast.error('Максимально 5 файлів для завдання');
+      return false;
+    }
+
     const isSubtask = !!currentTask.parent_id;
     const parentTask = isSubtask ? taskList.find(task => task.id === currentTask.parent_id) : null;
 
@@ -597,7 +683,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       return false;
     }
 
-    // Перевірка для підзавдань
     if (isSubtask && parentTask) {
       if (currentTask.start_date && parentTask.start_date && new Date(currentTask.start_date) < new Date(parentTask.start_date)) {
         toast.error('Дата початку підзавдання не може бути раніше головного завдання');
@@ -624,7 +709,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
     if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
     if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
 
-    // Перевірка для підзавдань
     if (isSubtask && parentTask?.start_date && date < new Date(parentTask.start_date)) {
       toast.error(`Дата не може бути раніше батьківського завдання (${format(new Date(parentTask.start_date), 'dd.MM.yyyy')})`);
       return;
@@ -660,7 +744,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
     if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
     if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
 
-    // Перевірка для підзавдань
     if (isSubtask && parentTask?.end_date && date > new Date(parentTask.end_date)) {
       toast.error(`Дата не може бути пізніше батьківського завдання (${format(new Date(parentTask.end_date), 'dd.MM.yyyy')})`);
       return;
@@ -709,7 +792,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       return;
     }
 
-    // Перевірка на існуючий тег
     const tagExists = availableTags.some(
       tag => tag.name.toLowerCase() === newTagName.trim().toLowerCase()
     );
@@ -758,7 +840,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
     if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
     if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
 
-    // Додаткові перевірки для підзавдань
     if (isSubtask && parentTask) {
       if (currentTask.start_date && parentTask.start_date && new Date(currentTask.start_date) < new Date(parentTask.start_date)) {
         toast.error('Дата початку підзавдання не може бути раніше батьківського завдання');
@@ -772,22 +853,54 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
     }
 
     try {
-      await router.put(`/tasks/${currentTask.id}`, {
-        title: currentTask.title,
-        description: currentTask.description,
-        start_date: currentTask.start_date,
-        end_date: currentTask.end_date,
-        priority: currentTask.priority,
-        risk: currentTask.risk,
-        tags: selectedTags
-      }, {
+      const formData = new FormData();
+      formData.append('title', currentTask.title);
+      formData.append('description', currentTask.description || '');
+      if (currentTask.start_date) formData.append('start_date', currentTask.start_date);
+      if (currentTask.end_date) formData.append('end_date', currentTask.end_date);
+      formData.append('priority', currentTask.priority);
+      formData.append('risk', currentTask.risk || 'low');
+      selectedTags.forEach(tag => formData.append('tags[]', tag));
+
+      // Add new files
+      currentTask.attachments?.forEach((attachment, index) => {
+        if (attachment.file) {
+          formData.append(`attachments[${index}]`, attachment.file);
+        }
+      });
+
+      // Add files to delete (existing files not in current attachments)
+      const existingFiles = currentTask.attachments
+        ?.filter(att => att.id)
+        .map(att => att.id) || [];
+      const originalFiles = taskList.find(t => t.id === currentTask.id)?.attachments || [];
+      originalFiles.forEach(originalFile => {
+        if (!existingFiles.includes(originalFile.id)) {
+          formData.append('deleted_attachments[]', originalFile.id!);
+        }
+      });
+
+      await router.post(`/tasks/${currentTask.id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
         onSuccess: () => {
           toast.success('Завдання успішно оновлено');
           setIsEditModalOpen(false);
           setTaskList((prev) =>
             prev.map((task) =>
               task.id === currentTask.id
-                ? { ...task, ...currentTask, tags: availableTags.filter(tag => selectedTags.includes(tag.id)) }
+                ? { 
+                    ...task, 
+                    ...currentTask, 
+                    tags: availableTags.filter(tag => selectedTags.includes(tag.id)),
+                    attachments: currentTask.attachments?.map(att => ({
+                      id: att.id || Date.now().toString(), // temporary ID for new files
+                      name: att.name,
+                      size: att.size,
+                      url: att.url || URL.createObjectURL(att.file!)
+                    }))
+                  }
                 : task
             )
           );
@@ -867,6 +980,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Мої завдання" />
       <Toaster position="top-center" richColors />
+      <style>{quillStyles}</style>
 
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -1134,7 +1248,7 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
       </div>
 
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen} modal={false}>
-        <DialogContent className="sm:max-w-[700px] border-white/10 text-white">
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           {currentTask && (
             <>
               <DialogHeader>
@@ -1152,7 +1266,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                 </div>
 
                 <div>
-                  <style>{quillStyles}</style>
                   <ReactQuill
                     value={currentTask.description || ''}
                     onChange={(value) => handleTaskUpdate('description', value)}
@@ -1202,7 +1315,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                                 if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
                                 if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
 
-                                // Для підзавдань - не можна вибрати дату раніше батьківського завдання
                                 if (isSubtask && parentTask?.start_date && date < new Date(parentTask.start_date)) return true;
                                 if (boardStartDate && date < boardStartDate) return true;
                                 if (boardDeadline && date > boardDeadline) return true;
@@ -1262,7 +1374,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                           </SelectContent>
                         </Select>
                       </div>
-
                     </div>
                   </div>
 
@@ -1295,7 +1406,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                                 if (boardDeadline) boardDeadline.setHours(23, 59, 59, 999);
                                 if (boardStartDate) boardStartDate.setHours(0, 0, 0, 0);
 
-                                // Для підзавдань - не можна вибрати дату пізніше батьківського завдання
                                 if (isSubtask && parentTask?.end_date && date > new Date(parentTask.end_date)) return true;
                                 if (boardStartDate && date < boardStartDate) return true;
                                 if (boardDeadline && date > boardDeadline) return true;
@@ -1356,7 +1466,6 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                           </SelectContent>
                         </Select>
                       </div>
-
                     </div>
                   </div>
                 </div>
@@ -1541,6 +1650,76 @@ export default function Tasks({ tasks, filters = {}, availableTags = [] }: {
                       ) : null;
                     })}
                   </div>
+                </div>
+
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                    Файли завдання
+                  </h3>
+                  
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors border-gray-300 dark:border-gray-600`}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                  >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                      multiple
+                      accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx"
+                    />
+                    
+                    <Paperclip className="h-10 w-10 mx-auto text-gray-400 dark:text-gray-500 mb-2" />
+                    <p className="text-gray-500 dark:text-gray-400 mb-2">
+                      Перетягніть файли сюди або
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-blue-600 hover:text-blue-800 font-medium dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      Виберіть файли
+                    </button>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                      PNG, JPG, PDF, DOC, XLS (до 10MB)
+                    </p>
+                  </div>
+
+                  {currentTask.attachments && currentTask.attachments.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {currentTask.attachments.map((attachment, index) => (
+                        <div key={attachment.id || index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <Paperclip className="h-4 w-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                            {attachment.url ? (
+                              <a 
+                                href={attachment.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="truncate text-sm text-blue-500 hover:text-blue-400 dark:text-blue-400 dark:hover:text-blue-300"
+                              >
+                                {attachment.name}
+                              </a>
+                            ) : (
+                              <span className="truncate text-sm text-gray-700 dark:text-gray-300">
+                                {attachment.name}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 p-1"
+                            title="Видалити файл"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-between pt-4">

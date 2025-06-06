@@ -7,6 +7,8 @@ use App\Models\Task;
 use App\Models\Board;
 use App\Services\TaskService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -25,8 +27,7 @@ class TaskController extends Controller
     public function create(Request $request)
     {   
         $boardId = $request->query('board_id');
-
-$board = Board::findOrFail($boardId); // витягуємо дошку
+        $board = Board::findOrFail($boardId);
 
         $tasks = Task::where('user_id', $request->user()->id)
                     ->where('board_id', $boardId)
@@ -39,7 +40,7 @@ $board = Board::findOrFail($boardId); // витягуємо дошку
             'tasks' => $tasks,
             'board_id' => $request->input('board_id'),
             'tags' => $tags,
-            'board' => $board, // <-- оце додали
+            'board' => $board,
         ]);
     }
 
@@ -54,7 +55,7 @@ $board = Board::findOrFail($boardId); // витягуємо дошку
         ]);
     }
 
-     public function store(Request $request)
+    public function store(Request $request)
     {   
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -67,21 +68,33 @@ $board = Board::findOrFail($boardId); // витягуємо дошку
             'parent_id' => 'nullable',
             'tags' => 'nullable|array',
             'tags.*' => 'exists:tags,id',
+            'attachments' => 'nullable|array',
+            'attachments.*' => 'nullable|file|mimes:jpg,jpeg,png,pdf,docx|max:10240',
         ]);
+    
+        $attachments = [];
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $extension = $file->getClientOriginalExtension();
+                $filename = Str::uuid() . '.' . $extension;
+                $path = Storage::disk('public')->putFileAs('attachments', $file, $filename);
+                $url = Storage::url($path);
+                
+                $attachments[] = [
+                    'url' => $url,
+                    'name' => $file->getClientOriginalName(),
+                    'type' => $file->getClientMimeType()
+                ];
+            }
+        }
     
         DB::beginTransaction();
         try {
-            $task = Task::create([
-                'title' => $validated['title'],
-                'description' => $validated['description'],
-                'start_date' => $validated['start_date'] ?? null,
-                'end_date' => $validated['end_date'] ?? null,
-                'priority' => $validated['priority'],
-                'risk' => $validated['risk'],
-                'board_id' => $validated['board_id'],
-                'user_id' => $request->user()->id,
-                'parent_id' => $validated['parent_id'] ?? null,
-            ]);
+            $task = $this->taskService->createTask(
+                $request->user()->id, 
+                $validated, 
+                $attachments
+            );
     
             if (!empty($validated['tags'])) {
                 $task->tags()->attach($validated['tags']);
@@ -109,20 +122,61 @@ $board = Board::findOrFail($boardId); // витягуємо дошку
         ]);
     }
 
+    public function upload(Task $task, Request $request)
+    {
+        $data = $request->validate(['file' => 'required|file|max:10240']);
+
+        $extension = $data['file']->getClientOriginalExtension();
+        $filename = Str::uuid() . '.' . $extension;
+        $path = Storage::disk('public')->putFileAs('attachments', $data['file'], $filename);
+        $url = Storage::url($path);
+        
+        $attachments[] = [
+            'url' => $url,
+            'name' => $data['file']->getClientOriginalName(),
+            'type' => $data['file']->getClientMimeType()
+        ];
+        
+        $prevAttachments = $task->attachments ?? [];
+        $task->attachments = array_merge($prevAttachments, $attachments);
+        $task->save();
+
+        return redirect()->back()->with('success', 'Файл успішно завантажено');
+    }
+
     public function update(Request $request, Task $task)
     {
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
-            'start_date' => 'nullable|date', // Changed from deadline
-        'end_date' => 'nullable|date|after_or_equal:start_date', // New field
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
             'priority' => 'sometimes|required|in:low,medium,high',
             'risk' => 'sometimes|required|in:low,medium,high',
             'status' => 'sometimes|required|in:active,completed,archived',
             'board_id' => 'sometimes|required|exists:boards,id',
             'tags' => 'nullable|array',
             'tags.*' => 'exists:tags,id',
+            'attachments' => 'nullable|array',
         ]);
+
+        // Обробка нових файлів, якщо вони є
+        $attachments = $task->attachments ?? [];
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $extension = $file->getClientOriginalExtension();
+                $filename = Str::uuid() . '.' . $extension;
+                $path = Storage::disk('public')->putFileAs('attachments', $file, $filename);
+                $url = Storage::url($path);
+                
+                $attachments[] = [
+                    'url' => $url,
+                    'name' => $file->getClientOriginalName(),
+                    'type' => $file->getClientMimeType()
+                ];
+            }
+            $validated['attachments'] = $attachments;
+        }
 
         DB::beginTransaction();
         try {
@@ -141,18 +195,18 @@ $board = Board::findOrFail($boardId); // витягуємо дошку
     }
 
     public function calendar(Request $request)
-{
-    $tasks = Task::where('user_id', $request->user()->id)
-        ->with('board', 'tags')
-        ->get();
+    {
+        $tasks = Task::where('user_id', $request->user()->id)
+            ->with('board', 'tags')
+            ->get();
 
-    $boards = Board::where('user_id', $request->user()->id)->get();
+        $boards = Board::where('user_id', $request->user()->id)->get();
 
-    return Inertia::render('calendar', [
-        'tasks' => $tasks,
-        'boards' => $boards,
-    ]);
-}
+        return Inertia::render('calendar', [
+            'tasks' => $tasks,
+            'boards' => $boards,
+        ]);
+    }
 
     public function destroy(Task $task)
     {
@@ -172,24 +226,24 @@ $board = Board::findOrFail($boardId); // витягуємо дошку
     }
 
     public function gantt(Request $request)
-{
-    $tasks = Task::where('user_id', $request->user()->id)
-        ->get()
-        ->map(function ($task) {
-            return [
-                'id' => $task->id,
-                'name' => $task->title,
-                'start' => optional($task->start_date)->toDateString(),
-                'end' => optional($task->end_date)->toDateString() ?? now()->addDays(7)->toDateString(),
-                'progress' => $task->is_completed ? 100 : 0,
-                'dependencies' => '',
-            ];
-        });
+    {
+        $tasks = Task::where('user_id', $request->user()->id)
+            ->get()
+            ->map(function ($task) {
+                return [
+                    'id' => $task->id,
+                    'name' => $task->title,
+                    'start' => optional($task->start_date)->toDateString(),
+                    'end' => optional($task->end_date)->toDateString() ?? now()->addDays(7)->toDateString(),
+                    'progress' => $task->is_completed ? 100 : 0,
+                    'dependencies' => '',
+                ];
+            });
 
-    return Inertia::render('gantt', [
-        'tasks' => $tasks
-    ]);
-}
+        return Inertia::render('gantt', [
+            'tasks' => $tasks
+        ]);
+    }
 
     public function complete(Task $task)
     {

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Task;
 use App\Models\Board;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class TaskService
 {
@@ -24,9 +25,9 @@ class TaskService
             ->withQueryString();
     }
 
-        public function createTask(string $userId, array $data): Task
+    public function createTask(string $userId, array $data, array $attachments = []): Task
     {
-        return DB::transaction(function () use ($userId, $data) {
+        return DB::transaction(function () use ($userId, $data, $attachments) {
             $taskData = [
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
@@ -37,6 +38,7 @@ class TaskService
                 'board_id' => $data['board_id'],
                 'user_id' => $userId,
                 'parent_id' => $data['parent_id'] ?? null,
+                'attachments' => $attachments, // Додаємо вкладення
             ];
 
             $task = Task::create($taskData);
@@ -49,53 +51,50 @@ class TaskService
         });
     }
 
-
     public function updateTask(Task $task, array $data): Task
-{
-    return DB::transaction(function () use ($task, $data) {
-        $updateData = [
-            'title' => $data['title'] ?? $task->title,
-            'description' => $data['description'] ?? $task->description,
-            'start_date' => $data['start_date'] ?? $task->start_date,
-            'end_date' => $data['end_date'] ?? $task->end_date,
-            'priority' => $data['priority'] ?? $task->priority,
-            'risk' => $data['risk'] ?? $task->risk,
-            'board_id' => $data['board_id'] ?? $task->board_id,
-            // Видалено ручне оновлення статусу - він буде автоматично визначений при збереженні
-        ];
+    {
+        return DB::transaction(function () use ($task, $data) {
+            $updateData = [
+                'title' => $data['title'] ?? $task->title,
+                'description' => $data['description'] ?? $task->description,
+                'start_date' => $data['start_date'] ?? $task->start_date,
+                'end_date' => $data['end_date'] ?? $task->end_date,
+                'priority' => $data['priority'] ?? $task->priority,
+                'risk' => $data['risk'] ?? $task->risk,
+                'board_id' => $data['board_id'] ?? $task->board_id,
+                'attachments' => $data['attachments'] ?? $task->attachments, // Оновлюємо вкладення
+            ];
 
-        // Якщо передано явний статус "completed" - оновлюємо
-        if (isset($data['status']) && $data['status'] === 'completed') {
-            $updateData['status'] = 'completed';
-            $updateData['is_completed'] = true;
-        }
+            if (isset($data['status']) && $data['status'] === 'completed') {
+                $updateData['status'] = 'completed';
+                $updateData['is_completed'] = true;
+            }
 
-        $task->update($updateData);
+            $task->update($updateData);
 
-        // Якщо оновлення дат - автоматично перерахує статус
-        if (isset($data['start_date']) || isset($data['end_date'])) {
-            $task->autoUpdateStatus();
-            $task->save();
-        }
+            if (isset($data['start_date']) || isset($data['end_date'])) {
+                $task->autoUpdateStatus();
+                $task->save();
+            }
 
-        if (array_key_exists('tags', $data)) {
-            $task->tags()->sync($data['tags'] ?? []);
-        }
+            if (array_key_exists('tags', $data)) {
+                $task->tags()->sync($data['tags'] ?? []);
+            }
 
-        return $task->fresh()->load('tags', 'board');
-    });
-}
+            return $task->fresh()->load('tags', 'board');
+        });
+    }
 
     public function deleteTask(Task $task): void
     {
         DB::transaction(function () use ($task) {
-        $task->tags()->detach();
-        
-        if ($task->subtasks()->exists()) {
-            $task->subtasks()->delete();
-        }
-        
-        $task->delete();
+            $task->tags()->detach();
+            
+            if ($task->subtasks()->exists()) {
+                $task->subtasks()->delete();
+            }
+            
+            $task->delete();
         });
     }
 
