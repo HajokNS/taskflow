@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 
 import { type BreadcrumbItem, type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Menu, Search, ContactRoundIcon, Calendar, UserIcon, CircuitBoardIcon, GanttChart, BookCheck, BookCheckIcon, LayoutDashboardIcon } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, Menu, Search, ContactRoundIcon, Calendar, UserIcon, CircuitBoardIcon, GanttChart, BookCheck, BookCheckIcon, LayoutDashboardIcon, Bell } from 'lucide-react';
 import AppLogo from './app-logo';
 import AppLogoIcon from './app-logo-icon';
 import { Task } from '@mui/icons-material';
@@ -47,7 +47,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Нагадування',
         href: '/reminder',
-        icon: UserIcon,
+        icon: Bell,
     },
 ];
 
