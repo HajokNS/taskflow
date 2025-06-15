@@ -44,6 +44,11 @@ const mainNavItems: NavItem[] = [
         href: '/admin',
         icon: UserIcon,
     },
+    {
+        title: 'Нагадування',
+        href: '/reminder',
+        icon: UserIcon,
+    },
 ];
 
 const rightNavItems: NavItem[] = [

@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\BoardController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\NotificationController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -18,7 +19,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::post('/boards/{board}/upload', [BoardController::class, 'upload'])->name('boards.upload');
 
 
-Route::get('/gantt', [TaskController::class, 'gantt'])->name('gantt');
+Route::get('/reminder', [NotificationController::class, 'reminder'])->middleware(['auth', 'verified']);
+
+Route::get('/gantt', [TaskController::class, 'gantt'])->name('gantt')->middleware(['auth', 'verified']);
 
 
 require __DIR__.'/settings.php';

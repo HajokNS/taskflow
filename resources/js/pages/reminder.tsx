@@ -1,134 +1,71 @@
-import React, { useEffect, useState } from 'react';
-import { Reminder as ReminderType, SharedData } from '../types';
-import { fetchReminders, createReminder, updateReminder, deleteReminder } from '../api/reminders';
-import { DateTimePicker } from '@mui/x-date-pickers';
-import { Button, List, ListItem, ListItemText, IconButton, TextField, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import { usePage } from '@inertiajs/react';
+import { useState, useEffect } from 'react';
+import AppLayout from '@/layouts/app-layout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Bell } from 'lucide-react';
 
-const RemindersPage = () => {
-    const { user } = usePage<SharedData>().props.auth;
-    const [reminders, setReminders] = useState<ReminderType[]>([]);
-    const [openDialog, setOpenDialog] = useState(false);
-    const [currentReminder, setCurrentReminder] = useState<Partial<ReminderType> | null>(null);
-    const [selectedTaskId, setSelectedTaskId] = useState('');
+export default function Reminder({ reminders }) {
+    const [sortedReminders, setSortedReminders] = useState([]);
 
     useEffect(() => {
-        if (user) {
-            loadReminders();
-        }
-    }, [user]);
+        const sorted = [...reminders].sort((a, b) => 
+            new Date(a.remind_at) - new Date(b.remind_at)
+        );
+        setSortedReminders(sorted);
+    }, [reminders]);
 
-    const loadReminders = async () => {
-        try {
-            const data = await fetchReminders();
-            setReminders(data);
-        } catch (error) {
-            console.error('Failed to load reminders:', error);
-        }
-    };
-
-    const handleOpenCreateDialog = () => {
-        setCurrentReminder({
-            task_id: '',
-            remind_at: new Date(),
+    const formatTime = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleTimeString('uk-UA', {
+            hour: '2-digit',
+            minute: '2-digit'
         });
-        setOpenDialog(true);
     };
 
-    const handleOpenEditDialog = (reminder: ReminderType) => {
-        setCurrentReminder(reminder);
-        setOpenDialog(true);
-    };
-
-    const handleCloseDialog = () => {
-        setOpenDialog(false);
-        setCurrentReminder(null);
-    };
-
-    const handleSubmit = async () => {
-        if (!currentReminder) return;
-
-        try {
-            if (currentReminder.id) {
-                await updateReminder(currentReminder.id, {
-                    remind_at: currentReminder.remind_at,
-                });
-            } else {
-                await createReminder({
-                    task_id: selectedTaskId,
-                    remind_at: currentReminder.remind_at,
-                });
-            }
-            loadReminders();
-            handleCloseDialog();
-        } catch (error) {
-            console.error('Failed to save reminder:', error);
-        }
-    };
-
-    const handleDelete = async (id: string) => {
-        try {
-            await deleteReminder(id);
-            loadReminders();
-        } catch (error) {
-            console.error('Failed to delete reminder:', error);
-        }
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('uk-UA', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
     };
 
     return (
-        <div>
-            <h1>Reminders</h1>
-            <Button variant="contained" onClick={handleOpenCreateDialog}>
-                Add Reminder
-            </Button>
+        <AppLayout>
+            <div className="container mx-auto px-4 py-8 space-y-8">
+                <div className="flex items-center gap-3">
+                    <Bell className="w-8 h-8 text-primary" />
+                    <h1 className="text-3xl font-bold">Мої нагадування</h1>
+                    <span className="ml-2 text-sm text-muted-foreground">
+                        {reminders.length} всього
+                    </span>
+                </div>
 
-            <List>
-                {reminders.map((reminder) => (
-                    <ListItem key={reminder.id}>
-                        <ListItemText
-                            primary={`Task: ${reminder.task.title}`}
-                            secondary={`Remind at: ${new Date(reminder.remind_at).toLocaleString()}`}
-                        />
-                        <IconButton onClick={() => handleOpenEditDialog(reminder)}>
-                            <EditIcon />
-                        </IconButton>
-                        <IconButton onClick={() => handleDelete(reminder.id)}>
-                            <DeleteIcon />
-                        </IconButton>
-                    </ListItem>
-                ))}
-            </List>
-
-            <Dialog open={openDialog} onClose={handleCloseDialog}>
-                <DialogTitle>{currentReminder?.id ? 'Edit Reminder' : 'Create Reminder'}</DialogTitle>
-                <DialogContent>
-                    {!currentReminder?.id && (
-                        <TextField
-                            label="Task ID"
-                            value={selectedTaskId}
-                            onChange={(e) => setSelectedTaskId(e.target.value)}
-                            fullWidth
-                            margin="normal"
-                        />
-                    )}
-                    <DateTimePicker
-                        label="Remind At"
-                        value={currentReminder?.remind_at || null}
-                        onChange={(date) => setCurrentReminder({ ...currentReminder, remind_at: date })}
-                        renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDialog}>Cancel</Button>
-                    <Button onClick={handleSubmit} color="primary">
-                        Save
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </div>
+                {sortedReminders.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {sortedReminders.map(reminder => (
+                            <Card key={reminder.id} className="flex flex-col h-full">
+                                <CardHeader className="pb-2 flex-1">
+                                    <CardTitle className="text-lg font-medium">
+                                        {reminder.message}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="mt-auto pt-0">
+                                    <div className="text-sm text-muted-foreground">
+                                        <p className="text-left">Закінчення о <span className="font-medium">{formatTime(reminder.remind_at)}</span></p>
+                                        <p className="text-left">{formatDate(reminder.remind_at)}</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                        <Bell className="w-12 h-12 text-muted-foreground" />
+                        <p className="text-lg text-muted-foreground">Немає активних нагадувань</p>
+                    </div>
+                )}
+            </div>
+        </AppLayout>
     );
-};
-
-export default RemindersPage;
+}

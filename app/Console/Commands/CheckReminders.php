@@ -12,6 +12,7 @@ class CheckReminders extends Command
 
     public function handle(ReminderService $reminderService)
     {
+        logger(111111111);
         $reminderService->createRemindersForCloseDeadlines();
         $this->info('Reminders checked successfully');
     }

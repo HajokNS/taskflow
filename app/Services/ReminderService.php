@@ -10,86 +10,60 @@ class ReminderService
 {
     public function createReminder(array $data): Reminder
     {
-        $task = Task::findOrFail($data['task_id']);
+        $task = Task::where('id', $data['task_id'])
+                   ->where('user_id', $data['user_id'])
+                   ->firstOrFail();
 
         return Reminder::create([
-            'task_id' => $data['task_id'],
-            'user_id' => $data['user_id'],
-            'remind_at' => $data['remind_at'],
-            'message' => $data['message'] ?? $this->generateDefaultMessage(Task::find($data['task_id']))
+            'task_id' => $task->id,
+            'user_id' => $task->user_id,
+            'remind_at' => Carbon::parse($data['remind_at']),
+            'message' => $data['message'] ?? $this->generateSimpleTaskMessage($task)
         ]);
     }
 
-    public function updateReminder(Reminder $reminder, array $data): Reminder
+    protected function generateSimpleTaskMessage(Task $task): string
     {
-        $reminder->update($data);
-        return $reminder->fresh();
+        return "Завдання: {$task->title}";
     }
 
-    public function deleteReminder(Reminder $reminder): void
+    public function createRemindersForCloseDeadlines(): int
     {
-        $reminder->delete();
+        $tasks = Task::whereNotNull('end_date')
+                   ->where('end_date', '<=', now()->addMinutes(5))
+                   ->where('end_date', '>=', now())
+                   ->get();
+
+        $createdCount = 0;
+
+        foreach ($tasks as $task) {
+            if (!$this->hasActiveReminder($task)) {
+                $this->createReminder([
+                    'task_id' => $task->id,
+                    'user_id' => $task->user_id,
+                    'remind_at' => $task->end_date,
+                    'message' => $this->generateSimpleTaskMessage($task)
+                ]);
+                $createdCount++;
+            }
+        }
+        
+        return $createdCount;
+    }
+
+    protected function hasActiveReminder(Task $task): bool
+    {
+        return Reminder::where('task_id', $task->id)
+                     ->where('remind_at', '>=', now())
+                     ->exists();
     }
 
     public function getUpcomingReminders($userId)
     {
         return Reminder::with('task')
-            ->whereHas('task', function($query) use ($userId) {
-                $query->where('user_id', $userId);
-            })
-            ->where('remind_at', '>=', now())
-            ->orderBy('remind_at')
-            ->get();
-    }
-
-    public function getTasksWithCloseDeadlines()
-    {
-        return Task::with('user')
-            ->whereNotNull('deadline')
-            ->where('deadline', '<=', now()->addMinutes(5))
-            ->where('deadline', '>=', now())
-            ->get();
-    }
-
-    public function createRemindersForCloseDeadlines()
-    {
-        $tasks = $this->getTasksWithCloseDeadlines();
-        
-        foreach ($tasks as $task) {
-            // Перевіряємо, чи ще не існує нагадування для цієї задачі
-            $existingReminder = Reminder::where('task_id', $task->id)
-                ->where('remind_at', '>=', now())
-                ->first();
-            
-            if (!$existingReminder) {
-                $this->createReminder([
-                    'task_id' => $task->id,
-                    'user_id' => $task->user_id,
-                    'remind_at' => $task->deadline,
-                    'message' => $this->generateDefaultMessage($task)
-                ]);
-            }
-        }
-        
-        return count($tasks);
-    }
-
-    protected function generateDefaultMessage(Task $task): string
-    {
-        $minutesLeft = Carbon::now()->diffInMinutes($task->deadline);
-        return "До дедлайну задачі '{$task->title}' залишилось {$minutesLeft} хвилин!";
-    }
-
-    public function getRemindersForTask(Task $task)
-    {
-        return $task->reminders()
-            ->orderBy('remind_at')
-            ->get();
-    }
-
-    public function deletePastReminders()
-    {
-        Reminder::where('remind_at', '<', now())
-            ->delete();
+                     ->where('user_id', $userId)
+                     ->where('remind_at', '>=', now())
+                     ->orderBy('remind_at')
+                     ->get();
     }
 }

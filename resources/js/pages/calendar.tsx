@@ -247,13 +247,11 @@ export default function CalendarPage({ tasks = [], boards = [] }: { tasks: Task[
                     const statusText = getStatusText(status);
                     
                     return (
-                      <Link
+                      <div
                         key={task.id}
-                        href={route('tasks.edit', { task: task.id })}
                         className={`
                           flex flex-col gap-1 p-2 rounded text-sm
-                          border hover:shadow-md transition-shadow
-                          cursor-pointer ${statusColor}
+                          border ${statusColor}
                         `}
                       >
                         <div className="flex items-center justify-between">
@@ -297,7 +295,7 @@ export default function CalendarPage({ tasks = [], boards = [] }: { tasks: Task[
                             ))}
                           </div>
                         )}
-                      </Link>
+                      </div>
                     );
                   })}
                 </div>

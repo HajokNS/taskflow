@@ -9,12 +9,5 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Твоя команда reminders:check
-Artisan::command('reminders:check', function () {
-    $this->info('Checking reminders...');
-    // Тут твоя логіка перевірки нагадувань
-})->purpose('Check reminders every 5 minutes');
 
-// Планування розкладу
-Schedule::command('reminders:check')->everyMinute();
 

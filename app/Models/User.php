@@ -48,4 +48,10 @@ class User extends Authenticatable implements MustVerifyEmail
             'is_admin' => 'boolean', // Додайте цей каст
         ];
     }
+
+    public function reminders() 
+    {
+        return $this->hasMany(Reminder::class);
+    }
+
 }
